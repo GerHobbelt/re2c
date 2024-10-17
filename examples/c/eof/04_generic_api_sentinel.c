@@ -117,7 +117,7 @@ yy6:
 }
 
 #define TEST(s, r) assert(lex(s, sizeof(s) - 1) == r)
-int main() {
+int main(void) {
     TEST("", 0);
     TEST("one two three ", 3);
     TEST("f0ur", -1);

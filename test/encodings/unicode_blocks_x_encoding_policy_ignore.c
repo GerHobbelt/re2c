@@ -2724,7 +2724,7 @@ static unsigned int encode_utf16 (const unsigned int * ranges, unsigned int rang
 	return s - s_start;
 }
 
-int main()
+int main(void)
 {
 	unsigned int * buffer_Basic_Latin = new unsigned int [258];
 	YYCTYPE * s_Basic_Latin = (YYCTYPE *) buffer_Basic_Latin;

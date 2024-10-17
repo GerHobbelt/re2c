@@ -182,7 +182,7 @@ yy13:
 
 }
 
-int main() {
+int main(void) {
     assert(lex("123") == OK);
     assert(lex("123.4567") == OK);
     return 0;

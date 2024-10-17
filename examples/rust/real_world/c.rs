@@ -6626,7 +6626,7 @@ fn main() -> std::io::Result<()> {
     // We append a '\0' at the end of the string to act as a sentinel.
     let mut str: String;
     if args.len() < 2 {
-        str = "int main() { return 0; }\0".to_string(); // example C program
+        str = "int main(void) { return 0; }\0".to_string(); // example C program
     } else {
         str = fs::read_to_string(&args[1])?;
         str.push('\0');

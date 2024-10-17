@@ -305,7 +305,7 @@ yy12:
 
 }
 
-int main()
+int main(void)
 {
     unsigned int count;
     assert(lex("aa bb cc", count) == 0 && count == 3);

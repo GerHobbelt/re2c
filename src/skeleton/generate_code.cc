@@ -763,7 +763,7 @@ Code* emit_skeleton_epilog(Output& output) {
 
     CodeList* main = code_list(alc);
     append(main, code_text(alc, ""));
-    append(main, code_text(alc, "int main()"));
+    append(main, code_text(alc, "int main(void)"));
     append(main, code_block(alc, stmts, CodeBlock::Kind::WRAPPED));
 
     return code_block(alc, main, CodeBlock::Kind::RAW);

@@ -131,7 +131,7 @@ static void test(const char *str, unsigned int len, int res)
 }
 
 #define TEST(s, r) test(s, sizeof(s) - 1, r)
-int main()
+int main(void)
 {
     TEST("", 0);
     TEST("one two three ", 3);

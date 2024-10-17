@@ -43,6 +43,6 @@ int lex(const char *YYCURSOR) {       // C/C++ code
 
 }                                     //
                                       //
-int main() {                          // C/C++ code
+int main(void) {                          // C/C++ code
     return lex("qwerty42");           //
 }                                     //

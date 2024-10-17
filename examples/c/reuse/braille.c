@@ -1659,7 +1659,7 @@ yy300:
 
 }
 
-int main()
+int main(void)
 {
     FILE *f;
 

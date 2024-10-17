@@ -440,7 +440,7 @@ yy70:
 
 #define TEST(s, i) assert(lex(s) == i)
 
-int main()
+int main(void)
 {
     TEST("Аня", 3);
     TEST("Маша", 1);

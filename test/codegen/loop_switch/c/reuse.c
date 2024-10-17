@@ -196,7 +196,7 @@ static int lex_utf32(const uint32_t *YYCURSOR)
 
 }
 
-int main()
+int main(void)
 {
     static const uint8_t s8[] = // UTF-8
         { 0xe2, 0x88, 0x80, 0x78, 0x20, 0xe2, 0x88, 0x83, 0x79 };

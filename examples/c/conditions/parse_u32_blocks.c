@@ -227,7 +227,7 @@ yy27:
 
 }
 
-int main() {
+int main(void) {
     assert(parse_u32("") == ERROR);
     assert(parse_u32("1234567890") == 1234567890);
     assert(parse_u32("0b1101") == 13);

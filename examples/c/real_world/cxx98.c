@@ -8308,7 +8308,7 @@ yy568:
     }
 }
 
-int main()
+int main(void)
 {
     const char *fname = "example.cpp";
     FILE *f;
@@ -8318,7 +8318,7 @@ int main()
     fprintf(f,
         "#include<stdio.h>\n"
         "\n"
-        "int main()\n"
+        "int main(void)\n"
         "{\n"
         "    int n;\n"
         "    printf(\"Enter the number:\\n\");\n"

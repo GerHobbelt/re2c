@@ -272,7 +272,7 @@ yy11:
 }
 }
 
-int main() {
+int main(void) {
     const char *fname = "input";
     const SemVer semver = {1, 22, 333};
     std::vector<SemVer> expect(BUFSIZE, semver), actual;

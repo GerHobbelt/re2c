@@ -53,7 +53,7 @@ yy5:
 
 }
 
-int main()
+int main(void)
 {
     printf("%d\n", test("AB"));
     return 0;

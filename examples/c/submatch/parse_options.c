@@ -1610,7 +1610,7 @@ yy105:
     }
 }
 
-int main() {
+int main(void) {
     assert(lex("-v --limit=8K -d08/08/1985 -p/usr/src/linux "
         "--format=\"%s\" --limit -f=3 --verbos --d\"19th May\"") == 0);
     return 0;

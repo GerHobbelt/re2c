@@ -42,7 +42,7 @@ yy4:
     }
 }
 
-int main() {
+int main(void) {
     const char *fname = "input";
     const char s1[] = "Text\r\nwith\r\nnewlines.\r\n\r\n";
     const char s2[] = "Text\nwith\nnewlines.\n\n";

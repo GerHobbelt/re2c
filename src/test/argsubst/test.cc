@@ -16,7 +16,7 @@ static std::string f(const std::string& str,
 
 } // namespace re2c_test
 
-int main() {
+int main(void) {
     CHECK(re2c_test::f("", "@@", "", 42, false) == "");
     CHECK(re2c_test::f("@@, @@, @@{xyz}, @@{xy}, @@{xyzz}, @@@{xyz}", "@@", "xyz", 42, false)
             == "@@, @@, 42, @@{xy}, @@{xyzz}, @42");

@@ -329,7 +329,7 @@ yy20:
 
 }
 
-int main()
+int main(void)
 {
     input_t in;
     if (!lex(in)) {

@@ -230,7 +230,7 @@ yy15:
 
 }
 
-int main()
+int main(void)
 {
     FILE *f = fopen("input.txt", "rb");
     if (!f) return 1;

@@ -94,7 +94,7 @@ yy11:
 
 }
 
-int main()
+int main(void)
 {
     const char *str = "aaa\\baaa";
     int res = scan(str);

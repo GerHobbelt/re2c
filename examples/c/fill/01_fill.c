@@ -132,7 +132,7 @@ yy11:
     }
 }
 
-int main() {
+int main(void) {
     const char *fname = "input";
     const char content[] = "'qu\0tes' 'are' 'fine: \\'' ";
 

@@ -38,7 +38,7 @@ yy3:
 
 }
 
-int main() {
+int main(void) {
     const char *s = "ab";
     LexerState st = { s, s , NULL };
     assert(lex(st) == 1);

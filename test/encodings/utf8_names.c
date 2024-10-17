@@ -12781,7 +12781,7 @@ const char *names[] =
     , "Zsófia"
     };
 
-int main()
+int main(void)
 {
     for (const char *name : names) {
         if (lex(name) != 0) {

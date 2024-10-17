@@ -885,7 +885,7 @@ yy55:
     }
 }
 
-int main()
+int main(void)
 {
     input_t in;
     unsigned int count;

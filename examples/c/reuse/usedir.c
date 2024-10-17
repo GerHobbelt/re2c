@@ -182,7 +182,7 @@ yy26:
 
 }
 
-int main() {
+int main(void) {
     assert(lex("salmon") == FISH);
     assert(lex("what?") == DUNNO);
     return 0;

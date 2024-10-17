@@ -79,7 +79,7 @@ bool lex(const char *s) {
     */
 }
 
-int main() {
+int main(void) {
     assert(lex(\(dq1234\(dq));
     return 0;
 }
@@ -125,7 +125,7 @@ yy3:
 
 }
 
-int main() {
+int main(void) {
     assert(lex(\(dq1234\(dq));
     return 0;
 }
@@ -1682,7 +1682,7 @@ static int lex(const char *YYCURSOR) {
     }
 }
 
-int main() {
+int main(void) {
     assert(lex(\(dq\(dq) == 0);
     assert(lex(\(dqone two three\(dq) == 3);
     assert(lex(\(dqf0ur\(dq) == \-1);
@@ -1742,7 +1742,7 @@ static int lex(const char *str, unsigned int len) {
 }
 
 #define TEST(s, r) assert(lex(s, sizeof(s) \- 1) == r)
-int main() {
+int main(void) {
     TEST(\(dq\(dq, 0);
     TEST(\(dq\(aqqu\e0tes\(aq \(aqare\(aq \(aqfine: \e\e\(aq\(aq \(dq, 3);
     TEST(\(dq\(aqunterminated\e\e\(aq\(dq, \-1);
@@ -1822,7 +1822,7 @@ exit:
 }
 
 #define TEST(s, r) assert(lex(s, sizeof(s) \- 1) == r)
-int main() {
+int main(void) {
     TEST(\(dq\(dq, 0);
     TEST(\(dq\(aqqu\e0tes\(aq \(aqare\(aq \(aqfine: \e\e\(aq\(aq \(dq, 3);
     TEST(\(dq\(aqunterminated\e\e\(aq\(dq, \-1);
@@ -1890,7 +1890,7 @@ static int lex(const char *str, unsigned int len) {
 }
 
 #define TEST(s, r) assert(lex(s, sizeof(s) \- 1) == r)
-int main() {
+int main(void) {
     TEST(\(dq\(dq, 0);
     TEST(\(dq\(aqqu\e0tes\(aq \(aqare\(aq \(aqfine: \e\e\(aq\(aq \(dq, 3);
     TEST(\(dq\(aqunterminated\e\e\(aq\(dq, \-1);
@@ -2049,7 +2049,7 @@ static int lex(Input &in) {
     }
 }
 
-int main() {
+int main(void) {
     const char *fname = \(dqinput\(dq;
     const char content[] = \(dq\(aqqu\e0tes\(aq \(aqare\(aq \(aqfine: \e\e\(aq\(aq \(dq;
 
@@ -2198,7 +2198,7 @@ static int lex(Input &in) {
     }
 }
 
-int main() {
+int main(void) {
     const char *fname = \(dqinput\(dq;
     const char content[] = \(dq\(aqqu\e0tes\(aq \(aqare\(aq \(aqfine: \e\e\(aq\(aq \(dq;
 
@@ -2312,7 +2312,7 @@ hex:
     */
 }
 
-int main() {
+int main(void) {
     assert(parse_u32(\(dq\(dq) == ERROR);
     assert(parse_u32(\(dq1234567890\(dq) == 1234567890);
     assert(parse_u32(\(dq0b1101\(dq) == 13);
@@ -2458,7 +2458,7 @@ static uint64_t parse_u32(const char *s) {
     */
 }
 
-int main() {
+int main(void) {
     assert(parse_u32(\(dq\(dq) == ERROR);
     assert(parse_u32(\(dq1234567890\(dq) == 1234567890);
     assert(parse_u32(\(dq0b1101\(dq) == 13);
@@ -2650,7 +2650,7 @@ void test(const char **packets, Status expect) {
     remove(fname);
 }
 
-int main() {
+int main(void) {
     const char *packets1[] = {0};
     const char *packets2[] = {\(dqzero;\(dq, \(dqone;\(dq, \(dqtwo;\(dq, \(dqthree;\(dq, \(dqfour;\(dq, 0};
     const char *packets3[] = {\(dqzer0;\(dq, 0};
@@ -2737,7 +2737,7 @@ static What lex(const char *s) {
     */
 }
 
-int main() {
+int main(void) {
     assert(lex(\(dqsalmon\(dq) == FISH);
     assert(lex(\(dqwhat?\(dq) == DUNNO);
     return 0;
@@ -2783,7 +2783,7 @@ static int lex_utf32(const uint32_t *s) {
     */
 }
 
-int main() {
+int main(void) {
     static const uint8_t s8[] = // UTF\-8
         { 0xe2, 0x88, 0x80, 0x78, 0x20, 0xe2, 0x88, 0x83, 0x79 };
 
@@ -2928,7 +2928,7 @@ static bool lex(const char *str, SemVer &ver) {
     */
 }
 
-int main() {
+int main(void) {
     SemVer v;
     assert(lex(\(dq23.34\(dq, v) && v.major == 23 && v.minor == 34 && v.patch == 0);
     assert(lex(\(dq1.2.999\(dq, v) && v.major == 1 && v.minor == 2 && v.patch == 999);
@@ -3042,7 +3042,7 @@ static bool lex(Input &in, std::vector<SemVer> &vers) {
     */}
 }
 
-int main() {
+int main(void) {
     const char *fname = \(dqinput\(dq;
     const SemVer semver = {1, 22, 333};
     std::vector<SemVer> expect(BUFSIZE, semver), actual;
@@ -3130,7 +3130,7 @@ static bool lex(const char *str, SemVer &ver) {
     */
 }
 
-int main() {
+int main(void) {
     SemVer v;
     assert(lex(\(dq23.34\(dq, v) && v.major == 23 && v.minor == 34 && v.patch == 0);
     assert(lex(\(dq1.2.999\(dq, v) && v.major == 1 && v.minor == 2 && v.patch == 999);
@@ -3237,7 +3237,7 @@ static bool parse(const char *str, Ver &ver) {
     */
 }
 
-int main() {
+int main(void) {
     Ver v;
     assert(parse(\(dq1\(dq, v) && v == Ver({1}));
     assert(parse(\(dq1.2.3.4.5.6.7\(dq, v) && v == Ver({1, 2, 3, 4, 5, 6, 7}));
@@ -3332,7 +3332,7 @@ static int lex(const char *s) {
     */
 }
 
-int main() {
+int main(void) {
     assert(lex(\(dq_Ыдентификатор\(dq) == 0);
     return 0;
 }
@@ -3413,7 +3413,7 @@ Result lex(const char *s) {
     */
 }
 
-int main() {
+int main(void) {
     assert(lex(\(dq123\(dq) == OK);
     assert(lex(\(dq123.4567\(dq) == OK);
     return 0;
@@ -3470,7 +3470,7 @@ long lex(LexerState& st) {
     */
 }
 
-int main() {
+int main(void) {
     const char *s = \(dqab\(dq;
     LexerState st = { s, s /*!stags:re2c format = \(dq, NULL\(dq; */ };
     assert(lex(st) == 1);

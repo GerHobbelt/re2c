@@ -305,7 +305,7 @@ gen_test_blocks =
                 (\ (s, cs) -> "static const unsigned int chars_" ++ s ++ " [] = " ++ cs ++ ";"
                 ) $ zip blocknames' charsets_c
             , ef_body
-            , "int main()"
+            , "int main(void)"
             , "{"
             , unlines $ map
                 (\ (s, sz) ->

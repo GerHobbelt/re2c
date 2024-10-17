@@ -265,7 +265,7 @@ void test(const char **packets, Status expect) {
     remove(fname);
 }
 
-int main() {
+int main(void) {
     const char *packets1[] = {0};
     const char *packets2[] = {"zero;", "one;", "two;", "three;", "four;", 0};
     const char *packets3[] = {"zer0;", 0};

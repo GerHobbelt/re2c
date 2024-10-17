@@ -120,7 +120,7 @@ loop:
 
 }
 
-int main()
+int main(void)
 {
     const char *fname = "input";
     const char str[] = "'qu\0tes' 'are' 'fine: \\'' ";

@@ -27,7 +27,7 @@ yy3:
 
 }
 
-int main() {
+int main(void) {
     assert(lex("1234"));
     return 0;
 }

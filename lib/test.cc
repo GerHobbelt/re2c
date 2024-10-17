@@ -1304,7 +1304,7 @@ static int test_all_tstring() {
     return e;
 }
 
-int main() {
+int main(void) {
     int e = 0;
 
     e |= test_all_posix(0);

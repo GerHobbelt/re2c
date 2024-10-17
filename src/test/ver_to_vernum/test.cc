@@ -131,6 +131,6 @@ static int test() {
 
 } // namespace re2c_test
 
-int main() {
+int main(void) {
     return re2c_test::test();
 }

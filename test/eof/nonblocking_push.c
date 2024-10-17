@@ -563,7 +563,7 @@ yy28:
 
 }
 
-int main()
+int main(void)
 {
   int fds[2];
   pipe(fds);

@@ -14,7 +14,7 @@ zutest_suite all_unit_tests[] = {
 };
 
 
-int main()
+int main(void)
 {
 	run_unit_tests(all_unit_tests);
 	exit(1);

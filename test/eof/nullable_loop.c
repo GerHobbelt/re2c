@@ -279,7 +279,7 @@ yy38:
     } while (1);
 }
 
-int main()
+int main(void)
 {
     assert(lex1("") == 0);
     assert(lex1("a") == 0);

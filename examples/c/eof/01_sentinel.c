@@ -105,7 +105,7 @@ yy6:
     }
 }
 
-int main() {
+int main(void) {
     assert(lex("") == 0);
     assert(lex("one two three") == 3);
     assert(lex("f0ur") == -1);

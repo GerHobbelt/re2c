@@ -12660,7 +12660,7 @@ static unsigned int encode_utf8 (const unsigned int * ranges, unsigned int range
 	return s - s_start + 1;
 }
 
-int main()
+int main(void)
 {
 	unsigned int * buffer_Basic_Latin = new unsigned int [516];
 	YYCTYPE * s_Basic_Latin = (YYCTYPE *) buffer_Basic_Latin;

@@ -173,7 +173,7 @@ yy14:
     lex3(s) == i \
 );
 
-int main()
+int main(void)
 {
     TEST("a", 0);
     TEST("0", 1);

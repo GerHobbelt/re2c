@@ -4002,7 +4002,7 @@ yy427:
 
 }
 
-int main() {
+int main(void) {
     assert(lex("_Ыдентификатор") == 0);
     return 0;
 }

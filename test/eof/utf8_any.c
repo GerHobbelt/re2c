@@ -2155,7 +2155,7 @@ static void lex_simple(char *str, size_t len)
     lex(cur, end, NULL, lex1_simple);
 }
 
-int main()
+int main(void)
 {
     char s[] = "zы\x00й1aaaa";
     const size_t l = sizeof(s) - 1;

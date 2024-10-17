@@ -214,7 +214,7 @@ yy20:
     }
 }
 
-int main() {
+int main(void) {
     const char *fname = "etc_passwd";
     FILE *f;
 

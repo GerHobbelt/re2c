@@ -77,7 +77,7 @@ yy11:
 }
 
 #define TEST(s, r) assert(lex(s, sizeof(s) - 1) == r)
-int main() {
+int main(void) {
     TEST("", 0);
     TEST("'qu\0tes' 'are' 'fine: \\'' ", 3);
     TEST("'unterminated\\'", -1);

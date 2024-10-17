@@ -181,7 +181,7 @@ yy10:
 
 }
 
-int main() {
+int main(void) {
     SemVer v;
     assert(lex("23.34", v) && v.major == 23 && v.minor == 34 && v.patch == 0);
     assert(lex("1.2.999", v) && v.major == 1 && v.minor == 2 && v.patch == 999);

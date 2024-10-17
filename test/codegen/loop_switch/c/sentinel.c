@@ -116,7 +116,7 @@ loop:
 
 }
 
-int main()
+int main(void)
 {
     assert(lex("") == 0);
     assert(lex("one two three") == 3);
