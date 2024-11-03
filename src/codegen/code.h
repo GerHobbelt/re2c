@@ -9,6 +9,7 @@
 #include "src/msg/location.h"
 #include "src/util/allocator.h"
 #include "src/util/check.h"
+#include "src/util/containers.h"
 #include "src/util/string_utils.h"
 
 namespace re2c {
@@ -33,13 +34,7 @@ inline Label* new_label(OutAllocator& alc, uint32_t index) {
     return l;
 }
 
-template<typename T>
-struct code_list_t {
-    T* head;
-    T** ptail;
-};
-
-using CodeList = code_list_t<Code>;
+using CodeList = list_t<Code>;
 
 struct CodeJump {
     const State* to;
@@ -57,7 +52,7 @@ struct CodeBmState {
     CodeBmState* next;
 };
 
-using CodeBmStates = code_list_t<CodeBmState>;
+using CodeBmStates = list_t<CodeBmState>;
 
 struct CodeBitmap {
     CodeBmStates* states;
@@ -202,7 +197,7 @@ struct CodeCase {
     CodeCase* next;
 };
 
-using CodeCases = code_list_t<CodeCase>;
+using CodeCases = list_t<CodeCase>;
 
 struct CodeSwitch {
     const char* expr;
@@ -247,7 +242,7 @@ struct CodeArg {
     CodeArg* next;
 };
 
-using CodeArgs = code_list_t<CodeArg>;
+using CodeArgs = list_t<CodeArg>;
 
 struct CodeFunc {
     CodeArgs* args;
@@ -267,6 +262,14 @@ struct CodeLabel {
     };
 };
 
+struct CodeTable {
+    const char* name;
+    const char* type;
+    const char** elems;
+    size_t size;
+    bool tabulate;
+};
+
 struct Code {
     union {
         const char* text;
@@ -280,47 +283,13 @@ struct Code {
         CodeFmt fmt;
         CodeLabel label;
         CodeList* loop;
+        CodeTable* table;
         loc_t loc;
     };
 
     CodeKind kind;
     Code* next;
 };
-
-template<typename T>
-inline code_list_t<T>* new_code_list(OutAllocator& alc) {
-    code_list_t<T>* x = alc.alloct<code_list_t<T> >(1);
-    x->head = nullptr;
-    x->ptail = &x->head;
-    return x;
-}
-
-template<typename T>
-inline void append(code_list_t<T>* list, T* elem) {
-    if (elem != nullptr) {
-        *list->ptail = elem;
-        list->ptail = &elem->next;
-    }
-}
-
-template<typename T>
-inline void prepend(code_list_t<T>* list, T* elem) {
-    if (elem != nullptr) {
-        if (!list->head) {
-            list->ptail = &elem->next;
-        }
-        elem->next = list->head;
-        list->head = elem;
-    }
-}
-
-template<typename T>
-inline void append(code_list_t<T>* list1, code_list_t<T>* list2) {
-    if (list2 && list2->head) {
-        *list1->ptail = list2->head;
-        for (; *(list1->ptail); list1->ptail = &(*list1->ptail)->next);
-    }
-}
 
 inline Code* new_code(OutAllocator& alc, CodeKind kind) {
     Code* x = alc.alloct<Code>(1);
@@ -514,7 +483,7 @@ inline CodeRanges* code_ranges(
 }
 
 inline CodeCases* code_cases(OutAllocator& alc) {
-    return new_code_list<CodeCase>(alc);
+    return new_list<CodeCase>(alc);
 }
 
 inline CodeArg* code_arg(OutAllocator& alc, const char* arg) {
@@ -525,7 +494,7 @@ inline CodeArg* code_arg(OutAllocator& alc, const char* arg) {
 }
 
 inline CodeArgs* code_args(OutAllocator& alc) {
-    return new_code_list<CodeArg>(alc);
+    return new_list<CodeArg>(alc);
 }
 
 inline Code* code_func(OutAllocator& alc, const char* name, CodeArgs* args, const char* semi) {
@@ -552,7 +521,7 @@ inline Code* code_switch(OutAllocator& alc, const char* expr, CodeCases* cases) 
 }
 
 inline CodeList* code_list(OutAllocator& alc) {
-    return new_code_list<Code>(alc);
+    return new_list<Code>(alc);
 }
 
 inline CodeBmState* code_bmstate(OutAllocator& alc, const CodeGo* go, const State* s) {
@@ -567,7 +536,7 @@ inline CodeBmState* code_bmstate(OutAllocator& alc, const CodeGo* go, const Stat
 
 inline CodeBitmap* code_bitmap(OutAllocator& alc, uint32_t nchars) {
     CodeBitmap* x = alc.alloct<CodeBitmap>(1);
-    x->states = new_code_list<CodeBmState>(alc);
+    x->states = new_list<CodeBmState>(alc);
     x->nchars = nchars;
     x->used = false;
     return x;
@@ -577,6 +546,23 @@ inline CodeCmp* code_cmp(OutAllocator& alc, const char* cmp, uint32_t val) {
     CodeCmp* x = alc.alloct<CodeCmp>(1);
     x->cmp = cmp;
     x->val = val;
+    return x;
+}
+
+inline Code* code_table(
+        OutAllocator& alc,
+        const char* name,
+        const char* type,
+        const char** elems,
+        size_t size,
+        bool tabulate = false) {
+    Code* x = new_code(alc, CodeKind::TABLE);
+    CodeTable* t = x->table = alc.alloct<CodeTable>(1);
+    t->name = name;
+    t->type = type;
+    t->elems = elems;
+    t->size = size;
+    t->tabulate = tabulate;
     return x;
 }
 

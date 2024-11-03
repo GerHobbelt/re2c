@@ -9,6 +9,7 @@
 
 #include "src/adfa/adfa.h"
 #include "src/codegen/output.h"
+#include "src/codegen/syntax.h"
 #include "src/debug/debug.h"
 #include "src/dfa/dfa.h"
 #include "src/encoding/range_suffix.h"
@@ -30,7 +31,8 @@ static std::string make_name(Output& output, const std::string& cond, const loc_
     std::string name;
 
     // if the block is included from another file, prepend filename for disambiguation
-    if (loc.file > 0) {
+    // (file index 0 is for syntax file, file index 1 is for the first source file)
+    if (loc.file > 1) {
         name += output.msg.filenames[loc.file];
         for (size_t i = 0; i < name.length(); ++i) {
             if (!std::isalnum(static_cast<unsigned char>(name[i]))) name[i] = '_';
@@ -142,10 +144,14 @@ LOCAL_NODISCARD(Ret compile(int, char* argv[])) {
     Opt opts(globopts, msg);
     CHECK_RET(parse_opts(argv, globopts, opts, msg));
 
+    // Load syntax file before opening source files, as it must have file index 0.
+    Stx stx(out_alc);
+    CHECK_RET(load_syntax_config(globopts.syntax_file, msg, out_alc, stx, globopts.lang));
+
     Input input(&globopts, msg);
     CHECK_RET(input.open(globopts.source_file, nullptr));
 
-    Output output(out_alc, msg);
+    Output output(out_alc, stx, msg);
 
     Ast ast(ast_alc, out_alc);
 

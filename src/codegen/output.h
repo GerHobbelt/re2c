@@ -20,6 +20,7 @@ namespace re2c {
 
 // forward decls
 class Msg;
+class Stx;
 struct Adfa;
 struct Opt;
 struct opt_t;
@@ -55,6 +56,7 @@ using blocks_citer_t = blocks_t::const_iterator;
 using tagnames_t = std::set<std::string>;
 
 struct RenderContext {
+    Stx& stx;
     std::ostringstream os;
     const Msg& msg;
     const opt_t* opts;
@@ -62,8 +64,8 @@ struct RenderContext {
     uint32_t line;
     uint32_t ind;
 
-    RenderContext(const Msg& msg, const std::string& file)
-        : os(), msg(msg), opts(nullptr), file(file), line(1), ind(0) {}
+    RenderContext(Stx& stx, const Msg& msg, const std::string& file)
+        : stx(stx), os(), msg(msg), opts(nullptr), file(file), line(1), ind(0) {}
     FORBID_COPY(RenderContext);
 };
 
@@ -101,6 +103,9 @@ struct OutputBlock {
 };
 
 struct Output {
+    OutAllocator& allocator;
+    Stx& stx;
+    Msg& msg;
     blocks_t cblocks;  // .c file
     blocks_t hblocks;  // .h file
     blocks_t* pblocks; // selector
@@ -112,16 +117,14 @@ struct Output {
     bool warn_condition_order;
     bool need_header;
     bool done_mtag_defs;
-    Msg& msg;
     std::set<std::string> skeletons;
-    OutAllocator& allocator;
     Scratchbuf scratchbuf;
     OutputBlock* current_block;
 
     // "final" options accumulated for all non-reuse blocks
     const opt_t* total_opts;
 
-    Output(OutAllocator& alc, Msg& msg);
+    Output(OutAllocator& alc, Stx& stx, Msg& msg);
     ~Output();
     OutputBlock& block();
     void set_current_block(OutputBlock* block);
@@ -135,6 +138,29 @@ struct Output {
     Ret gen_prolog(Opt& opts, const loc_t& loc);
     void gen_epilog();
     FORBID_COPY(Output);
+};
+
+class OutputCallback {
+  public:
+    virtual void render_var(const char* /*var*/) {
+        UNREACHABLE();
+    }
+    virtual size_t get_list_size(const char* /*var*/) const {
+        UNREACHABLE();
+        return 0;
+    }
+    virtual void start_list(const char* /*var*/, size_t /*lbound*/, size_t /*rbound*/) {
+        UNREACHABLE();
+    }
+    virtual bool next_in_list(const char* /*var*/) {
+        UNREACHABLE();
+        return false;
+    }
+    virtual bool eval_cond(const char* /*cond*/) {
+        UNREACHABLE();
+        return false;
+    }
+    virtual ~OutputCallback() = default;
 };
 
 void init_go(CodeGo* go);
