@@ -9,6 +9,7 @@
 #include "src/constants.h"
 #include "src/encoding/enc.h"
 #include "src/options/symtab.h"
+#include "src/options/syntax.h"
 #include "src/util/attribute.h"
 #include "src/util/forbid_copy.h"
 
@@ -31,8 +32,9 @@ namespace re2c {
 // configurations until the whole block has been parsed. Immutable options, on the other hand, are
 // accessible for reading all the time (the parser itself depends on them).
 
-class Msg;
 class Input;
+class Msg;
+class Stx;
 
 #define RE2C_SIGIL "@@"
 
@@ -41,9 +43,9 @@ class Input;
 #define RE2C_LANG Lang::C
 #endif
 
+// TODO: remove CONSTOPT1
 #define RE2C_CONSTOPTS \
     CONSTOPT1(Target, target, Target::CODE) \
-    CONSTOPT(Lang, lang, RE2C_LANG) \
     CONSTOPT(bool, date, true) \
     CONSTOPT(bool, version, true) \
     CONSTOPT(bool, start_conditions, false) \
@@ -212,19 +214,33 @@ class Input;
 
 // Constant options.
 struct conopt_t {
+  private:
+    const Stx& stx;
+
+  public:
 #define CONSTOPT1 CONSTOPT
 #define CONSTOPT(type, name, value) type name;
     RE2C_CONSTOPTS
 #undef CONSTOPT1
 #undef CONSTOPT
 
-    conopt_t()
-#define CONSTOPT1(type, name, value) : name(value)
-#define CONSTOPT(type, name, value)  , name(value)
+    conopt_t(const Stx& stx)
+        : stx(stx)
+#define CONSTOPT1 CONSTOPT
+#define CONSTOPT(type, name, value) , name(value)
     RE2C_CONSTOPTS
 #undef CONSTOPT1
 #undef CONSTOPT
     {}
+
+    // forward methods from `Stx` to make them easier to use from lexer
+    inline const char* eval_word_conf(const char* name) const {
+        return stx.eval_word_conf(name);
+    }
+    inline bool eval_bool_conf(const char* name) const {
+        return stx.eval_bool_conf(name);
+    }
+
     FORBID_COPY(conopt_t);
 };
 
@@ -265,6 +281,10 @@ struct mutdef_t {
 
 // Union of constant and mutable options and default flags.
 struct opt_t {
+  private:
+    const Stx& stx;
+
+  public:
 #define CONSTOPT1 CONSTOPT
 #define CONSTOPT(type, name, value) type name;
     RE2C_CONSTOPTS
@@ -279,13 +299,16 @@ struct opt_t {
     RE2C_MUTOPTS
 #undef MUTOPT1
 #undef MUTOPT
-
     symtab_t symtab;
 
-    opt_t(const conopt_t& con, const mutopt_t& mut, const mutdef_t& def,
-          const symtab_t& symtab)
-#define CONSTOPT1(type, name, value) : name(con.name)
-#define CONSTOPT(type, name, value)  , name(con.name)
+    opt_t(const Stx& stx,
+            const conopt_t& con,
+            const mutopt_t& mut,
+            const mutdef_t& def,
+            const symtab_t& symtab)
+    : stx(stx)
+#define CONSTOPT1 CONSTOPT
+#define CONSTOPT(type, name, value) , name(con.name)
     RE2C_CONSTOPTS
 #undef CONSTOPT1
 #undef CONSTOPT
@@ -301,17 +324,30 @@ struct opt_t {
     , symtab(symtab)
     {}
 
-    ~opt_t() {}
-    opt_t(const opt_t& opt) = default;
-    opt_t& operator=(const opt_t& opt) = default;
-    opt_t(opt_t&& opt) = default;
-    opt_t& operator=(opt_t&& opt) = default;
+    // forward methods from `Stx` to make them easier to use from codegen
+    inline void eval_code_conf(std::ostream& os, const char* name, RenderCallback& callback) const {
+        stx.eval_code_conf(os, this, name, callback);
+    }
+    inline void eval_code_conf(std::ostream& os, const char* name) const {
+        stx.eval_code_conf(os, this, name);
+    }
+    inline const char* eval_word_conf(const char* name) const {
+        return stx.eval_word_conf(name);
+    }
+    inline bool eval_bool_conf(const char* name) const {
+        return stx.eval_bool_conf(name);
+    }
+    bool specialize_oneline_if() const { return stx.have_oneline_if; }
+    bool specialize_oneline_switch() const { return stx.have_oneline_switch; }
+
+    FORBID_COPY(opt_t);
 };
 
 // Options management.
 struct Opt {
   public:
-    const conopt_t& glob;
+    Stx stx;
+    const conopt_t glob;
     symtab_t symtab;
     Msg& msg;
 
@@ -339,7 +375,9 @@ struct Opt {
     bool diverge;
 
   public:
-    Opt(const conopt_t& globopts, Msg& msg);
+    Opt(OutAllocator& alc, Msg& msg);
+    const conopt_t& global() const { return glob; }
+    Ret parse(char** argv);
     Ret snapshot(const opt_t** opts) NODISCARD;
     Ret fix_global_and_defaults() NODISCARD;
     Ret restore(const opt_t* opts) NODISCARD;

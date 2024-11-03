@@ -88,6 +88,7 @@ enum class CodeKind: uint32_t {
     SKIP_BACKUP_PEEK,
     LINE_INFO_INPUT,
     LINE_INFO_OUTPUT,
+    FINGERPRINT,
     COND_ENUM,
     STATE_GOTO,
     STAGS,
@@ -95,6 +96,9 @@ enum class CodeKind: uint32_t {
     MAXFILL,
     MAXNMATCH,
     VAR,
+    CONST,
+    ARRAY,
+    ENUM,
     STMT,
     LOOP,
     TEXT,
@@ -103,7 +107,7 @@ enum class CodeKind: uint32_t {
     DFAS,
     LABEL,
     ABORT,
-    TABLE
+    DEBUG
 };
 
 // Types of variables in codegen (independent of the language language).

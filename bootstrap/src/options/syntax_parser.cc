@@ -63,27 +63,31 @@
 /* Pull parsers.  */
 #define YYPULL 1
 
-
-
+/* Substitute the type names.  */
+#define YYSTYPE         STX_STYPE
+/* Substitute the variable and function names.  */
+#define yyparse         stx_parse
+#define yylex           stx_lex
+#define yyerror         stx_error
+#define yydebug         stx_debug
+#define yynerrs         stx_nerrs
 
 /* First part of user prologue.  */
-#line 18 "../src/codegen/syntax_parser.ypp"
+#line 47 "../src/options/syntax_parser.ypp"
 
-#include <stdint.h>
 
-#include "src/codegen/syntax.h"
-#include "src/codegen/syntax_parser.h"
-#include "src/msg/msg.h"
+#include "src/options/opt.h"
+#include "src/options/syntax_parser.h"
 
 using namespace re2c;
 
 extern "C" {
     static void yyerror(StxFile& sf, re2c::Stx&, const char* s);
-    static int yylex(YYSTYPE* yylval, StxFile& sf);
+    static int yylex(STX_STYPE* yylval, StxFile& sf);
 }
 
 
-#line 87 "src/codegen/syntax_parser.cc"
+#line 91 "src/options/syntax_parser.cc"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -137,8 +141,7 @@ enum yysymbol_kind_t
   YYSYMBOL_code_cond = 23,                 /* code_cond  */
   YYSYMBOL_code_list = 24,                 /* code_list  */
   YYSYMBOL_list = 25,                      /* list  */
-  YYSYMBOL_names = 26,                     /* names  */
-  YYSYMBOL_expr = 27                       /* expr  */
+  YYSYMBOL_names = 26                      /* names  */
 };
 typedef enum yysymbol_kind_t yysymbol_kind_t;
 
@@ -405,7 +408,7 @@ void free (void *); /* INFRINGES ON USER NAME SPACE */
 
 #if (! defined yyoverflow \
      && (! defined __cplusplus \
-         || (defined YYSTYPE_IS_TRIVIAL && YYSTYPE_IS_TRIVIAL)))
+         || (defined STX_STYPE_IS_TRIVIAL && STX_STYPE_IS_TRIVIAL)))
 
 /* A type that is properly aligned for any stack member.  */
 union yyalloc
@@ -464,18 +467,18 @@ union yyalloc
 #endif /* !YYCOPY_NEEDED */
 
 /* YYFINAL -- State number of the termination state.  */
-#define YYFINAL  18
+#define YYFINAL  16
 /* YYLAST -- Last index in YYTABLE.  */
-#define YYLAST   51
+#define YYLAST   43
 
 /* YYNTOKENS -- Number of terminals.  */
 #define YYNTOKENS  18
 /* YYNNTS -- Number of nonterminals.  */
-#define YYNNTS  10
+#define YYNNTS  9
 /* YYNRULES -- Number of rules.  */
-#define YYNRULES  22
+#define YYNRULES  20
 /* YYNSTATES -- Number of states.  */
-#define YYNSTATES  58
+#define YYNSTATES  50
 
 /* YYMAXUTOK -- Last valid token kind.  */
 #define YYMAXUTOK   262
@@ -521,20 +524,20 @@ static const yytype_int8 yytranslate[] =
        5,     6,     7
 };
 
-#if YYDEBUG
+#if STX_DEBUG
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_uint8 yyrline[] =
 {
-       0,    68,    68,    69,    72,    76,    80,    88,    89,    92,
-      93,    94,    95,    98,   101,   106,   109,   112,   118,   121,
-     125,   131,   132
+       0,    94,    94,    95,    98,   102,   106,   114,   115,   118,
+     119,   120,   121,   124,   127,   132,   135,   138,   144,   147,
+     151
 };
 #endif
 
 /** Accessing symbol of state STATE.  */
 #define YY_ACCESSING_SYMBOL(State) YY_CAST (yysymbol_kind_t, yystos[State])
 
-#if YYDEBUG || 0
+#if STX_DEBUG || 0
 /* The user-facing name of the symbol whose (internal) number is
    YYSYMBOL.  No bounds checking.  */
 static const char *yysymbol_name (yysymbol_kind_t yysymbol) YY_ATTRIBUTE_UNUSED;
@@ -547,7 +550,7 @@ static const char *const yytname[] =
   "STX_NUMBER", "STX_STRING", "STX_CONF", "STX_CONF_CODE", "';'", "'('",
   "'?'", "')'", "':'", "'['", "']'", "'{'", "'}'", "','", "$accept",
   "confs", "conf", "code_exprs", "code_expr", "code_cond", "code_list",
-  "list", "names", "expr", YY_NULLPTR
+  "list", "names", YY_NULLPTR
 };
 
 static const char *
@@ -557,7 +560,7 @@ yysymbol_name (yysymbol_kind_t yysymbol)
 }
 #endif
 
-#define YYPACT_NINF (-29)
+#define YYPACT_NINF (-14)
 
 #define yypact_value_is_default(Yyn) \
   ((Yyn) == YYPACT_NINF)
@@ -571,12 +574,11 @@ yysymbol_name (yysymbol_kind_t yysymbol)
    STATE-NUM.  */
 static const yytype_int8 yypact[] =
 {
-      14,     1,     0,     6,    14,   -29,    12,    21,    17,    18,
-     -29,   -29,    25,    26,    22,     0,   -29,   -29,   -29,   -29,
-      23,    15,    24,   -29,   -29,    27,     4,   -29,   -29,    -1,
-      21,   -29,     0,     0,    31,    19,   -29,    11,    28,    -5,
-      -1,   -29,     0,   -29,    32,    29,    33,    34,    30,     0,
-     -29,   -29,    35,    36,     0,   -29,    37,   -29
+       7,    -1,    -2,     5,     7,     2,    16,    12,   -14,   -14,
+      18,    19,    17,    -2,   -14,   -14,   -14,   -14,   -14,     9,
+      10,   -14,    20,    -6,   -14,   -14,    16,   -14,    -2,    -2,
+      23,   -14,     6,    14,    -8,   -14,    -2,   -14,    27,    22,
+      21,    24,    -2,   -14,    25,    28,    -2,   -14,    29,   -14
 };
 
 /* YYDEFACT[STATE-NUM] -- Default reduction number in state STATE-NUM.
@@ -584,24 +586,23 @@ static const yytype_int8 yypact[] =
    means the default is an error.  */
 static const yytype_int8 yydefact[] =
 {
-       2,     0,     7,     0,     2,    21,     0,     0,     0,     0,
-      10,     9,     0,     0,     0,     7,    11,    12,     1,     3,
-       0,    19,     0,     5,     6,     0,     0,     4,     8,     0,
-       0,    18,     7,     7,     0,     0,    20,     0,     0,     0,
-       0,    13,     7,    15,     0,     0,     0,     0,     0,     7,
-      22,    14,     0,     0,     7,    16,     0,    17
+       2,     0,     7,     0,     2,     0,     0,     0,    10,     9,
+       0,     0,     0,     7,    11,    12,     1,     3,     6,    19,
+       0,     5,     0,     0,     4,     8,     0,    18,     7,     7,
+       0,    20,     0,     0,     0,    13,     7,    15,     0,     0,
+       0,     0,     7,    14,     0,     0,     7,    16,     0,    17
 };
 
 /* YYPGOTO[NTERM-NUM].  */
 static const yytype_int8 yypgoto[] =
 {
-     -29,    39,   -29,   -15,   -29,   -29,   -29,   -29,    10,   -28
+     -14,    31,   -14,   -13,   -14,   -14,   -14,   -14,    13
 };
 
 /* YYDEFGOTO[NTERM-NUM].  */
 static const yytype_int8 yydefgoto[] =
 {
-       0,     3,     4,    14,    15,    16,    17,     8,    22,     9
+       0,     3,     4,    12,    13,    14,    15,     7,    20
 };
 
 /* YYTABLE[YYPACT[STATE-NUM]] -- What to do in state STATE-NUM.  If
@@ -609,34 +610,31 @@ static const yytype_int8 yydefgoto[] =
    number is the opposite.  If YYTABLE_NINF, syntax error.  */
 static const yytype_int8 yytable[] =
 {
-      28,    35,     5,    10,     5,    11,    18,    44,     6,    12,
-       6,    45,    46,    13,     7,    20,    33,    37,    38,    34,
-       1,     2,    41,    42,    21,    23,    24,    47,    25,    26,
-      27,    40,    30,    29,    53,    39,    48,    32,    31,    56,
-      36,    49,    43,    19,    50,    51,    52,    54,     0,     0,
-      55,    57
+      25,     8,     5,     9,    38,    16,    29,    10,    39,    30,
+      18,    11,     6,     1,     2,    32,    33,    35,    36,    19,
+      21,    22,    23,    40,    27,    24,    26,    34,    37,    45,
+      28,    41,    43,    48,    42,    17,     0,    46,     0,    31,
+      44,     0,    47,    49
 };
 
 static const yytype_int8 yycheck[] =
 {
-      15,    29,     3,     3,     3,     5,     0,    12,     9,     9,
-       9,    16,    40,    13,    13,     3,    12,    32,    33,    15,
-       6,     7,    11,    12,     3,     8,     8,    42,     3,     3,
-       8,    12,    17,    10,    49,     4,     4,    10,    14,    54,
-      30,    12,    14,     4,    11,    11,    16,    12,    -1,    -1,
-      14,    14
+      13,     3,     3,     5,    12,     0,    12,     9,    16,    15,
+       8,    13,    13,     6,     7,    28,    29,    11,    12,     3,
+       8,     3,     3,    36,    14,     8,    17,     4,    14,    42,
+      10,     4,    11,    46,    12,     4,    -1,    12,    -1,    26,
+      16,    -1,    14,    14
 };
 
 /* YYSTOS[STATE-NUM] -- The symbol kind of the accessing symbol of
    state STATE-NUM.  */
 static const yytype_int8 yystos[] =
 {
-       0,     6,     7,    19,    20,     3,     9,    13,    25,    27,
-       3,     5,     9,    13,    21,    22,    23,    24,     0,    19,
-       3,     3,    26,     8,     8,     3,     3,     8,    21,    10,
-      17,    14,    10,    12,    15,    27,    26,    21,    21,     4,
-      12,    11,    12,    14,    12,    16,    27,    21,     4,    12,
-      11,    11,    16,    21,    12,    14,    21,    14
+       0,     6,     7,    19,    20,     3,    13,    25,     3,     5,
+       9,    13,    21,    22,    23,    24,     0,    19,     8,     3,
+      26,     8,     3,     3,     8,    21,    17,    14,    10,    12,
+      15,    26,    21,    21,     4,    11,    12,    14,    12,    16,
+      21,     4,    12,    11,    16,    21,    12,    14,    21,    14
 };
 
 /* YYR1[RULE-NUM] -- Symbol kind of the left-hand side of rule RULE-NUM.  */
@@ -644,7 +642,7 @@ static const yytype_int8 yyr1[] =
 {
        0,    18,    19,    19,    20,    20,    20,    21,    21,    22,
       22,    22,    22,    23,    23,    24,    24,    24,    25,    26,
-      26,    27,    27
+      26
 };
 
 /* YYR2[RULE-NUM] -- Number of symbols on the right-hand side of rule RULE-NUM.  */
@@ -652,14 +650,14 @@ static const yytype_int8 yyr2[] =
 {
        0,     2,     0,     2,     3,     3,     3,     0,     2,     1,
        1,     1,     1,     5,     7,     5,     8,    10,     3,     1,
-       3,     1,     7
+       3
 };
 
 
 enum { YYENOMEM = -2 };
 
 #define yyerrok         (yyerrstatus = 0)
-#define yyclearin       (yychar = YYEMPTY)
+#define yyclearin       (yychar = STX_EMPTY)
 
 #define YYACCEPT        goto yyacceptlab
 #define YYABORT         goto yyabortlab
@@ -671,7 +669,7 @@ enum { YYENOMEM = -2 };
 
 #define YYBACKUP(Token, Value)                                    \
   do                                                              \
-    if (yychar == YYEMPTY)                                        \
+    if (yychar == STX_EMPTY)                                        \
       {                                                           \
         yychar = (Token);                                         \
         yylval = (Value);                                         \
@@ -687,12 +685,12 @@ enum { YYENOMEM = -2 };
   while (0)
 
 /* Backward compatibility with an undocumented macro.
-   Use YYerror or YYUNDEF. */
-#define YYERRCODE YYUNDEF
+   Use STX_error or STX_UNDEF. */
+#define YYERRCODE STX_UNDEF
 
 
 /* Enable debugging if requested.  */
-#if YYDEBUG
+#if STX_DEBUG
 
 # ifndef YYFPRINTF
 #  include <stdio.h> /* INFRINGES ON USER NAME SPACE */
@@ -812,12 +810,12 @@ do {                                    \
 /* Nonzero means print parse trace.  It is left uninitialized so that
    multiple parsers can coexist.  */
 int yydebug;
-#else /* !YYDEBUG */
+#else /* !STX_DEBUG */
 # define YYDPRINTF(Args) ((void) 0)
 # define YY_SYMBOL_PRINT(Title, Kind, Value, Location)
 # define YY_STACK_PRINT(Bottom, Top)
 # define YY_REDUCE_PRINT(Rule)
-#endif /* !YYDEBUG */
+#endif /* !STX_DEBUG */
 
 
 /* YYINITDEPTH -- initial size of the parser's stacks.  */
@@ -925,7 +923,7 @@ YYSTYPE yylval YY_INITIAL_VALUE (= yyval_default);
 
   YYDPRINTF ((stderr, "Starting parse\n"));
 
-  yychar = YYEMPTY; /* Cause a token to be read.  */
+  yychar = STX_EMPTY; /* Cause a token to be read.  */
 
   goto yysetstate;
 
@@ -1035,25 +1033,25 @@ yybackup:
   /* Not known => get a lookahead token if don't already have one.  */
 
   /* YYCHAR is either empty, or end-of-input, or a valid lookahead.  */
-  if (yychar == YYEMPTY)
+  if (yychar == STX_EMPTY)
     {
       YYDPRINTF ((stderr, "Reading a token\n"));
       yychar = yylex (&yylval, sf);
     }
 
-  if (yychar <= YYEOF)
+  if (yychar <= STX_EOF)
     {
-      yychar = YYEOF;
+      yychar = STX_EOF;
       yytoken = YYSYMBOL_YYEOF;
       YYDPRINTF ((stderr, "Now at end of input.\n"));
     }
-  else if (yychar == YYerror)
+  else if (yychar == STX_error)
     {
       /* The scanner already issued an error message, process directly
          to error recovery.  But do not keep the error token as
          lookahead, it is too special and may lead us to an endless
          loop in error recovery. */
-      yychar = YYUNDEF;
+      yychar = STX_UNDEF;
       yytoken = YYSYMBOL_YYerror;
       goto yyerrlab1;
     }
@@ -1090,7 +1088,7 @@ yybackup:
   YY_IGNORE_MAYBE_UNINITIALIZED_END
 
   /* Discard the shifted token.  */
-  yychar = YYEMPTY;
+  yychar = STX_EMPTY;
   goto yynewstate;
 
 
@@ -1126,140 +1124,128 @@ yyreduce:
   switch (yyn)
     {
   case 3: /* confs: conf confs  */
-#line 69 "../src/codegen/syntax_parser.ypp"
+#line 95 "../src/options/syntax_parser.ypp"
              { stx.add_conf((yyvsp[-1].conf)->name, (yyvsp[-1].conf)); }
-#line 1132 "src/codegen/syntax_parser.cc"
+#line 1130 "src/options/syntax_parser.cc"
     break;
 
   case 4: /* conf: STX_CONF_CODE code_exprs ';'  */
-#line 72 "../src/codegen/syntax_parser.ypp"
+#line 98 "../src/options/syntax_parser.ypp"
                                {
     (yyval.conf) = stx.make_conf_code((yyvsp[-2].str), (yyvsp[-1].codes));
     if (stx.validate_conf_code((yyval.conf)) == Ret::FAIL) YYABORT;
 }
-#line 1141 "src/codegen/syntax_parser.cc"
+#line 1139 "src/options/syntax_parser.cc"
     break;
 
   case 5: /* conf: STX_CONF list ';'  */
-#line 76 "../src/codegen/syntax_parser.ypp"
+#line 102 "../src/options/syntax_parser.ypp"
                     {
     (yyval.conf) = stx.make_conf_list((yyvsp[-2].str), (yyvsp[-1].list));
     if (stx.validate_conf_list((yyval.conf)) == Ret::FAIL) YYABORT;
 }
-#line 1150 "src/codegen/syntax_parser.cc"
+#line 1148 "src/options/syntax_parser.cc"
     break;
 
-  case 6: /* conf: STX_CONF expr ';'  */
-#line 80 "../src/codegen/syntax_parser.ypp"
-                    {
-    (yyval.conf) = stx.make_conf_expr((yyvsp[-2].str), (yyvsp[-1].expr));
-    if (stx.validate_conf_expr((yyval.conf)) == Ret::FAIL) YYABORT;
+  case 6: /* conf: STX_CONF STX_NAME ';'  */
+#line 106 "../src/options/syntax_parser.ypp"
+                        {
+    (yyval.conf) = stx.make_conf_word((yyvsp[-2].str), (yyvsp[-1].str));
+    if (stx.validate_conf_word((yyval.conf)) == Ret::FAIL) YYABORT;
 }
-#line 1159 "src/codegen/syntax_parser.cc"
+#line 1157 "src/options/syntax_parser.cc"
     break;
 
   case 7: /* code_exprs: %empty  */
-#line 88 "../src/codegen/syntax_parser.ypp"
+#line 114 "../src/options/syntax_parser.ypp"
                        { (yyval.codes) = stx.new_code_list(); }
-#line 1165 "src/codegen/syntax_parser.cc"
+#line 1163 "src/options/syntax_parser.cc"
     break;
 
   case 8: /* code_exprs: code_expr code_exprs  */
-#line 89 "../src/codegen/syntax_parser.ypp"
+#line 115 "../src/options/syntax_parser.ypp"
                        { prepend((yyvsp[0].codes), (yyvsp[-1].code)); (yyval.codes) = (yyvsp[0].codes); }
-#line 1171 "src/codegen/syntax_parser.cc"
+#line 1169 "src/options/syntax_parser.cc"
     break;
 
   case 9: /* code_expr: STX_STRING  */
-#line 92 "../src/codegen/syntax_parser.ypp"
+#line 118 "../src/options/syntax_parser.ypp"
              { (yyval.code) = stx.make_code_str((yyvsp[0].str)); }
-#line 1177 "src/codegen/syntax_parser.cc"
+#line 1175 "src/options/syntax_parser.cc"
     break;
 
   case 10: /* code_expr: STX_NAME  */
-#line 93 "../src/codegen/syntax_parser.ypp"
+#line 119 "../src/options/syntax_parser.ypp"
              { (yyval.code) = stx.make_code_var((yyvsp[0].str)); }
-#line 1183 "src/codegen/syntax_parser.cc"
+#line 1181 "src/options/syntax_parser.cc"
     break;
 
   case 13: /* code_cond: '(' STX_NAME '?' code_exprs ')'  */
-#line 98 "../src/codegen/syntax_parser.ypp"
+#line 124 "../src/options/syntax_parser.ypp"
                                   {
     (yyval.code) = stx.make_code_cond((yyvsp[-3].str), (yyvsp[-1].codes), nullptr);
 }
-#line 1191 "src/codegen/syntax_parser.cc"
+#line 1189 "src/options/syntax_parser.cc"
     break;
 
   case 14: /* code_cond: '(' STX_NAME '?' code_exprs ':' code_exprs ')'  */
-#line 101 "../src/codegen/syntax_parser.ypp"
+#line 127 "../src/options/syntax_parser.ypp"
                                                  {
     (yyval.code) = stx.make_code_cond((yyvsp[-5].str), (yyvsp[-3].codes), (yyvsp[-1].codes));
 }
-#line 1199 "src/codegen/syntax_parser.cc"
+#line 1197 "src/options/syntax_parser.cc"
     break;
 
   case 15: /* code_list: '[' STX_NAME ':' code_exprs ']'  */
-#line 106 "../src/codegen/syntax_parser.ypp"
+#line 132 "../src/options/syntax_parser.ypp"
                                   {
     (yyval.code) = stx.make_code_list((yyvsp[-3].str), 0, -1, (yyvsp[-1].codes));
 }
-#line 1207 "src/codegen/syntax_parser.cc"
+#line 1205 "src/options/syntax_parser.cc"
     break;
 
   case 16: /* code_list: '[' STX_NAME '{' STX_NUMBER '}' ':' code_exprs ']'  */
-#line 109 "../src/codegen/syntax_parser.ypp"
+#line 135 "../src/options/syntax_parser.ypp"
                                                      {
     (yyval.code) = stx.make_code_list((yyvsp[-6].str), (yyvsp[-4].num), (yyvsp[-4].num), (yyvsp[-1].codes));
 }
-#line 1215 "src/codegen/syntax_parser.cc"
+#line 1213 "src/options/syntax_parser.cc"
     break;
 
   case 17: /* code_list: '[' STX_NAME '{' STX_NUMBER ':' STX_NUMBER '}' ':' code_exprs ']'  */
-#line 112 "../src/codegen/syntax_parser.ypp"
+#line 138 "../src/options/syntax_parser.ypp"
                                                                     {
     (yyval.code) = stx.make_code_list((yyvsp[-8].str), (yyvsp[-6].num), (yyvsp[-4].num), (yyvsp[-1].codes));
 }
-#line 1223 "src/codegen/syntax_parser.cc"
+#line 1221 "src/options/syntax_parser.cc"
     break;
 
   case 18: /* list: '[' names ']'  */
-#line 118 "../src/codegen/syntax_parser.ypp"
+#line 144 "../src/options/syntax_parser.ypp"
                     { (yyval.list) = (yyvsp[-1].list); }
-#line 1229 "src/codegen/syntax_parser.cc"
+#line 1227 "src/options/syntax_parser.cc"
     break;
 
   case 19: /* names: STX_NAME  */
-#line 121 "../src/codegen/syntax_parser.ypp"
+#line 147 "../src/options/syntax_parser.ypp"
            {
     (yyval.list) = stx.new_name_list();
     prepend((yyval.list), stx.make_name((yyvsp[0].str)));
 }
-#line 1238 "src/codegen/syntax_parser.cc"
+#line 1236 "src/options/syntax_parser.cc"
     break;
 
   case 20: /* names: STX_NAME ',' names  */
-#line 125 "../src/codegen/syntax_parser.ypp"
+#line 151 "../src/options/syntax_parser.ypp"
                      {
     prepend((yyvsp[0].list), stx.make_name((yyvsp[-2].str)));
     (yyval.list) = (yyvsp[0].list);
 }
-#line 1247 "src/codegen/syntax_parser.cc"
-    break;
-
-  case 21: /* expr: STX_NAME  */
-#line 131 "../src/codegen/syntax_parser.ypp"
-                                     { (yyval.expr) = stx.make_expr_name((yyvsp[0].str)); }
-#line 1253 "src/codegen/syntax_parser.cc"
-    break;
-
-  case 22: /* expr: '(' STX_NAME '?' expr ':' expr ')'  */
-#line 132 "../src/codegen/syntax_parser.ypp"
-                                     { (yyval.expr) = stx.make_expr_cond((yyvsp[-5].str), (yyvsp[-3].expr), (yyvsp[-1].expr)); }
-#line 1259 "src/codegen/syntax_parser.cc"
+#line 1245 "src/options/syntax_parser.cc"
     break;
 
 
-#line 1263 "src/codegen/syntax_parser.cc"
+#line 1249 "src/options/syntax_parser.cc"
 
       default: break;
     }
@@ -1301,7 +1287,7 @@ yyreduce:
 yyerrlab:
   /* Make sure we have latest lookahead translation.  See comments at
      user semantic actions for why this is necessary.  */
-  yytoken = yychar == YYEMPTY ? YYSYMBOL_YYEMPTY : YYTRANSLATE (yychar);
+  yytoken = yychar == STX_EMPTY ? YYSYMBOL_YYEMPTY : YYTRANSLATE (yychar);
   /* If not already recovering from an error, report this error.  */
   if (!yyerrstatus)
     {
@@ -1314,17 +1300,17 @@ yyerrlab:
       /* If just tried and failed to reuse lookahead token after an
          error, discard it.  */
 
-      if (yychar <= YYEOF)
+      if (yychar <= STX_EOF)
         {
           /* Return failure if at end of input.  */
-          if (yychar == YYEOF)
+          if (yychar == STX_EOF)
             YYABORT;
         }
       else
         {
           yydestruct ("Error: discarding",
                       yytoken, &yylval, sf, stx);
-          yychar = YYEMPTY;
+          yychar = STX_EMPTY;
         }
     }
 
@@ -1426,7 +1412,7 @@ yyexhaustedlab:
 | yyreturnlab -- parsing is finished, clean up and return.  |
 `----------------------------------------------------------*/
 yyreturnlab:
-  if (yychar != YYEMPTY)
+  if (yychar != STX_EMPTY)
     {
       /* Make sure we have latest lookahead translation.  See comments at
          user semantic actions for why this is necessary.  */
@@ -1452,7 +1438,7 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 134 "../src/codegen/syntax_parser.ypp"
+#line 156 "../src/options/syntax_parser.ypp"
 
 
 extern "C" {
@@ -1460,15 +1446,171 @@ extern "C" {
         sf.msg.error(sf.tok_loc(), "%s", s);
     }
 
-    static int yylex(YYSTYPE* yylval, re2c::StxFile& sf) {
+    static int yylex(STX_STYPE* yylval, re2c::StxFile& sf) {
         return sf.lex_token(yylval);
     }
 }
 
+extern const char* DEFAULT_SYNTAX_C;
+extern const char* DEFAULT_SYNTAX_GO;
+extern const char* DEFAULT_SYNTAX_RUST;
+
 namespace re2c {
 
-Ret StxFile::parse(Stx& stx) {
-    return yyparse(*this, stx) == 0 ? Ret::OK : Ret::FAIL;
+inline StxCodes* Stx::new_code_list() {
+    return new_list<StxCode, OutAllocator>(alc);
+}
+
+inline StxList* Stx::new_name_list() {
+    return new_list<StxName, OutAllocator>(alc);
+}
+
+inline StxConf* Stx::make_conf(StxConfType type, const char* name) {
+    StxConf* x = alc.alloct<StxConf>(1);
+    x->type = type;
+    x->name = name;
+    return x;
+}
+
+inline StxConf* Stx::make_conf_word(const char* name, const char* word) {
+    StxConf* x = make_conf(StxConfType::WORD, name);
+    x->word = word;
+    return x;
+}
+
+inline StxConf* Stx::make_conf_list(const char* name, StxList* list) {
+    StxConf* x = make_conf(StxConfType::LIST, name);
+    x->list = list;
+    return x;
+}
+
+inline StxConf* Stx::make_conf_code(const char* name, StxCodes* code) {
+    StxConf* x = make_conf(StxConfType::CODE, name);
+    x->code = code;
+    return x;
+}
+
+inline StxName* Stx::make_name(const char* name) {
+    StxName* x = alc.alloct<StxName>(1);
+    x->name = name;
+    x->next = nullptr;
+    return x;
+}
+
+inline StxCode* Stx::make_code(StxCodeType type) {
+    StxCode* x = alc.alloct<StxCode>(1);
+    x->type = type;
+    x->next = nullptr;
+    return x;
+}
+
+inline StxCode* Stx::make_code_str(const char* str) {
+    StxCode* x = make_code(StxCodeType::STR);
+    x->str = str;
+    return x;
+}
+
+inline StxCode* Stx::make_code_var(const char* var) {
+    StxCode* x = make_code(StxCodeType::VAR);
+    x->var = var;
+    return x;
+}
+
+inline StxCode* Stx::make_code_cond(const char* conf, StxCodes* then_code, StxCodes* else_code) {
+    StxCode* x = make_code(StxCodeType::COND);
+    x->cond.conf = conf;
+    x->cond.then_code = then_code;
+    x->cond.else_code = else_code;
+    return x;
+}
+
+inline StxCode* Stx::make_code_list(
+        const char* var, int32_t lbound, int32_t rbound, StxCodes* code) {
+    StxCode* x = make_code(StxCodeType::LIST);
+    x->list.var = var;
+    x->list.lbound = lbound;
+    x->list.rbound = rbound;
+    x->list.code = code;;
+    return x;
+}
+
+StxFile::StxFile(OutAllocator& alc, const std::string& fname, Msg& msg)
+    : alc(alc)
+    , fname(fname)
+    , file(nullptr)
+    , flen(0)
+    , buf(nullptr)
+    , cur(nullptr)
+    , tok(nullptr)
+    , pos(nullptr)
+    , loc({1, 0, 0}) // file index 0 is reserved for syntax file
+    , tmp_str()
+    , msg(msg)
+{}
+
+StxFile::~StxFile() {
+    delete[] buf;
+    if (file) fclose(file);
+}
+
+loc_t StxFile::tok_loc() const {
+    DCHECK(pos <= tok);
+    return {loc.line, static_cast<uint32_t>(tok - pos), loc.file};
+}
+
+Ret StxFile::read(Lang lang) {
+    if (fname.empty()) {
+        msg.filenames.push_back("<default syntax file>");
+
+        // use the default syntax config that is provided as a string
+        const char* src = nullptr;
+        switch (lang) {
+            case Lang::C: src = DEFAULT_SYNTAX_C; break;
+            case Lang::GO: src = DEFAULT_SYNTAX_GO; break;
+            case Lang::RUST: src = DEFAULT_SYNTAX_RUST; break;
+        }
+        flen = strlen(src);
+
+        // allocate buffer
+        buf = new uint8_t[flen + 1];
+
+        // fill in buffer from the config string
+        memcpy(buf, src, flen);
+        buf[flen] = 0;
+    } else {
+        msg.filenames.push_back(fname);
+
+        // use the provided syntax file
+        file = fopen(fname.c_str(), "rb");
+        if (!file) RET_FAIL(error("cannot open syntax file '%s'", fname.c_str()));
+
+        // get file size
+        fseek(file, 0, SEEK_END);
+        flen = static_cast<size_t>(ftell(file));
+        fseek(file, 0, SEEK_SET);
+
+        // allocate buffer
+        buf = new uint8_t[flen + 1];
+
+        // read file contents into buffer and append terminating zero at the end
+        if (fread(buf, 1, flen, file) != flen) {
+            RET_FAIL(error("cannot read syntax file '%s'", fname.c_str()));
+        }
+        buf[flen] = 0;
+    }
+
+    cur = tok = pos = buf;
+    return Ret::OK;
+}
+
+Ret load_syntax_config(Stx& stx, const std::string& config, Lang& lang, Msg& msg) {
+    StxFile sf(stx.alc, config, msg);
+    CHECK_RET(sf.read(lang));
+    if (yyparse(sf, stx) != 0) return Ret::FAIL;
+
+    stx.cache_conf_tests();
+
+    return Ret::OK;
 }
 
 } // namespace re2c

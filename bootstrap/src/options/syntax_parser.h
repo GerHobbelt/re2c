@@ -35,79 +35,115 @@
    especially those whose name start with YY_ or yy_.  They are
    private implementation details that can be changed or removed.  */
 
-#ifndef YY_YY_SRC_CODEGEN_SYNTAX_PARSER_H_INCLUDED
-# define YY_YY_SRC_CODEGEN_SYNTAX_PARSER_H_INCLUDED
+#ifndef YY_STX_SRC_OPTIONS_SYNTAX_PARSER_H_INCLUDED
+# define YY_STX_SRC_OPTIONS_SYNTAX_PARSER_H_INCLUDED
 /* Debug traces.  */
-#ifndef YYDEBUG
-# define YYDEBUG 0
-#endif
+#ifndef STX_DEBUG
+# if defined YYDEBUG
 #if YYDEBUG
-extern int yydebug;
+#   define STX_DEBUG 1
+#  else
+#   define STX_DEBUG 0
+#  endif
+# else /* ! defined YYDEBUG */
+#  define STX_DEBUG 0
+# endif /* ! defined YYDEBUG */
+#endif  /* ! defined STX_DEBUG */
+#if STX_DEBUG
+extern int stx_debug;
 #endif
 /* "%code requires" blocks.  */
-#line 1 "../src/codegen/syntax_parser.ypp"
+#line 1 "../src/options/syntax_parser.ypp"
 
 
+#include <stdint.h>
+
+#include "src/options/syntax.h"
+#include "src/util/allocator.h"
 #include "src/util/containers.h"
 
+union STX_STYPE;
+
 namespace re2c {
-struct StxConf;
-struct StxCode;
-struct StxExpr;
-struct StxName;
-using StxCodes = list_t<StxCode>;
-using StxList = list_t<StxName>;
-class Stx;
-class StxFile;
+
+struct conopt_t;
+
+class StxFile {
+    OutAllocator& alc;
+    const std::string& fname;
+    FILE* file;
+    size_t flen;
+    uint8_t* buf;
+    const uint8_t* cur; // current lexer position
+    const uint8_t* tok; // token start
+    const uint8_t* pos; // line start (used for error reporting)
+    loc_t loc;
+    std::string tmp_str;
+
+  public:
+    Msg& msg;
+
+  public:
+    StxFile(OutAllocator& alc, const std::string& fname, Msg& msg);
+    ~StxFile();
+    Ret read(Lang lang);
+    int lex_token(STX_STYPE* yylval);
+    bool check_conf_name(const char* name) const;
+    loc_t tok_loc() const;
+
+    FORBID_COPY(StxFile);
+};
+
+Ret load_syntax_config(Stx& stx, const std::string& config, Lang& lang, Msg& msg);
+
 } // namespace re2c
 
 
-#line 66 "src/codegen/syntax_parser.h"
+#line 103 "src/options/syntax_parser.h"
 
 /* Token kinds.  */
-#ifndef YYTOKENTYPE
-# define YYTOKENTYPE
-  enum yytokentype
+#ifndef STX_TOKENTYPE
+# define STX_TOKENTYPE
+  enum stx_tokentype
   {
-    YYEMPTY = -2,
-    YYEOF = 0,                     /* "end of file"  */
-    YYerror = 256,                 /* error  */
-    YYUNDEF = 257,                 /* "invalid token"  */
+    STX_EMPTY = -2,
+    STX_EOF = 0,                   /* "end of file"  */
+    STX_error = 256,               /* error  */
+    STX_UNDEF = 257,               /* "invalid token"  */
     STX_NAME = 258,                /* STX_NAME  */
     STX_NUMBER = 259,              /* STX_NUMBER  */
     STX_STRING = 260,              /* STX_STRING  */
     STX_CONF = 261,                /* STX_CONF  */
     STX_CONF_CODE = 262            /* STX_CONF_CODE  */
   };
-  typedef enum yytokentype yytoken_kind_t;
+  typedef enum stx_tokentype stx_token_kind_t;
 #endif
 
 /* Value type.  */
-#if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
-union YYSTYPE
+#if ! defined STX_STYPE && ! defined STX_STYPE_IS_DECLARED
+union STX_STYPE
 {
-#line 41 "../src/codegen/syntax_parser.ypp"
+#line 69 "../src/options/syntax_parser.ypp"
 
     const char* str;
     int32_t num;
     re2c::StxConf* conf;
-    re2c::StxExpr* expr;
     re2c::StxList* list;
     re2c::StxCode* code;
     re2c::StxCodes* codes;
 
-#line 100 "src/codegen/syntax_parser.h"
+#line 136 "src/options/syntax_parser.h"
 
 };
-typedef union YYSTYPE YYSTYPE;
-# define YYSTYPE_IS_TRIVIAL 1
-# define YYSTYPE_IS_DECLARED 1
+typedef union STX_STYPE STX_STYPE;
+# define STX_STYPE_IS_TRIVIAL 1
+# define STX_STYPE_IS_DECLARED 1
 #endif
 
 
 
 
-int yyparse (re2c::StxFile& sf, re2c::Stx& stx);
+int stx_parse (re2c::StxFile& sf, re2c::Stx& stx);
 
 
-#endif /* !YY_YY_SRC_CODEGEN_SYNTAX_PARSER_H_INCLUDED  */
+#endif /* !YY_STX_SRC_OPTIONS_SYNTAX_PARSER_H_INCLUDED  */

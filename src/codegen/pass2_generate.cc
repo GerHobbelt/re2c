@@ -10,10 +10,10 @@
 #include "src/adfa/adfa.h"
 #include "src/codegen/helpers.h"
 #include "src/codegen/output.h"
-#include "src/codegen/syntax.h"
 #include "src/msg/location.h"
 #include "src/msg/msg.h"
 #include "src/options/opt.h"
+#include "src/options/syntax.h"
 #include "src/regexp/rule.h"
 #include "src/regexp/tag.h"
 #include "src/skeleton/skeleton.h"
@@ -592,12 +592,13 @@ static void gen_goto(
 static const char* gen_cond(Output& output, const CodeCmp* cond) {
     const opt_t* opts = output.block().opts;
     Scratchbuf& buf = output.scratchbuf;
+
+    bool dot = opts->target == Target::DOT;
+    bool hex = opts->encoding.type() == Enc::Type::EBCDIC
+            || strcmp(opts->eval_word_conf("char_literals"), "hexadecimal") == 0;
+
     buf.str(opts->var_char).cstr(" ").str(cond->cmp).cstr(" ");
-    print_char_or_hex(buf.stream(),
-                      cond->val,
-                      opts->encoding.cunit_size(),
-                      opts->lang == Lang::RUST || opts->encoding.type() == Enc::Type::EBCDIC,
-                      opts->target == Target::DOT);
+    print_char_or_hex(buf.stream(), cond->val, opts->encoding.cunit_size(), hex, dot);
     return buf.flush();
 }
 
@@ -677,11 +678,12 @@ static CodeList* gen_gobm(Output& output, const Adfa& dfa, const CodeGoBm* go, c
     OutAllocator& alc = output.allocator;
     Scratchbuf& o = output.scratchbuf;
 
-    const char* nonzero = opts->lang == Lang::C ? "" : " != 0";
-
-    const char* elif_cond = o.str(bitmap_name(opts, dfa.cond))
-            .cstr("[").u32(go->bitmap->offset).cstr("+").str(opts->var_char).cstr("]")
-            .cstr(" & ").yybm_char(go->bitmap->mask, opts, 1).cstr(nonzero).flush();
+    bool need_compare = !opts->eval_bool_conf("implicit_bool_conversion");
+    if (need_compare) o.cstr("(");
+    o.str(bitmap_name(opts, dfa.cond)).cstr("[").u32(go->bitmap->offset).cstr("+")
+            .str(opts->var_char).cstr("]").cstr(" & ").yybm_char(go->bitmap->mask, opts, 1);
+    if (need_compare) o.cstr(") != 0");
+    const char* elif_cond = o.flush();
 
     CodeList* if_else = code_list(alc);
     const CodeJump jump = {go->bitmap->state, TCID0, false, false, false};
@@ -689,7 +691,10 @@ static CodeList* gen_gobm(Output& output, const Adfa& dfa, const CodeGoBm* go, c
 
     CodeList* stmts = code_list(alc);
     if (go->hgo != nullptr) {
-        const char* if_cond = o.str(opts->var_char).cstr(" & ~0xFF").cstr(nonzero).flush();
+        if (need_compare) o.cstr("(");
+        o.str(opts->var_char).cstr(" & ~0xFF");
+        if (need_compare) o.cstr(") != 0");
+        const char* if_cond = o.flush();
         CodeList* if_then = gen_goswif(output, dfa, go->hgo, from);
         append(stmts, code_if_then_elif(alc, if_cond, if_then, elif_cond, if_else));
     } else {
@@ -705,16 +710,19 @@ static CodeList* gen_gobm(Output& output, const Adfa& dfa, const CodeGoBm* go, c
 static CodeList* gen_gocp_table(Output& output, const CodeGoCpTable* go) {
     const opt_t* opts = output.block().opts;
     OutAllocator& alc = output.allocator;
+    Scratchbuf& buf = output.scratchbuf;
 
     const char** elems = alc.alloct<const char*>(CodeGoCpTable::TABLE_SIZE);
     for (uint32_t i = 0; i < CodeGoCpTable::TABLE_SIZE; ++i) {
-        elems[i] = output.scratchbuf.cstr("&&").str(opts->label_prefix)
-                .u32(go->table[i]->label->index).flush();
+        elems[i] = buf.cstr("&&").str(opts->label_prefix).u32(go->table[i]->label->index).flush();
     }
 
+    opts->eval_code_conf(buf.stream(), "code:type_yytarget");
+    const char* type = buf.flush();
+
     CodeList* stmts = code_list(alc);
-    append(stmts, code_table(alc, opts->var_cgoto_table.c_str(),
-            "static const void*", elems, CodeGoCpTable::TABLE_SIZE, /*tabulate*/ true));
+    append(stmts, code_array(alc, opts->var_cgoto_table.c_str(),
+            type, elems, CodeGoCpTable::TABLE_SIZE, /*tabulate*/ true));
     return stmts;
 }
 
@@ -886,8 +894,9 @@ static void emit_accept(
         for (uint32_t i = 0; i < nacc; ++i) {
             elems[i] = o.cstr("&&").str(opts->label_prefix).u32(acc[i].state->label->index).flush();
         }
-        append(block, code_table(
-                alc, opts->var_cgoto_table.c_str(), "static const void*", elems, nacc));
+        opts->eval_code_conf(o.stream(), "code:type_yytarget");
+        const char* type = o.flush();
+        append(block, code_array(alc, opts->var_cgoto_table.c_str(), type, elems, nacc));
 
         text = o.cstr("goto *").str(opts->var_cgoto_table).cstr("[").str(opts->var_accept).cstr("]")
                 .flush();
@@ -920,17 +929,40 @@ static void emit_accept(
 }
 
 static void gen_yydebug(Output& output, const Label* label, CodeList* stmts) {
-    const opt_t* opts = output.block().opts;
-    Scratchbuf& buf = output.scratchbuf;
+    if (output.block().opts->debug) {
+        // The label may be unused but still have a valid index (one such example is the initial label
+        // in goto/label mode). It still needs an YYDEBUG statement.
+        append(stmts, code_debug(output.allocator, label));
+    }
+}
 
-    if (!opts->debug) return;
+class GenEnumElem : public RenderCallback {
+    std::ostream& os;
+    const std::string& type;
+    const std::string& name;
 
-    // The label may be unused but still have a valid index (one such example is the initial label
-    // in goto/label mode). It still needs an YYDEBUG statement.
-    buf.str(opts->api_debug).cstr("(").unchecked_label(*label).cstr(", ");
-    gen_peek_expr(buf.stream(), opts);
-    buf.cstr(")");
-    append(stmts, code_stmt(output.allocator, buf.flush()));
+  public:
+    GenEnumElem(std::ostream& os, const std::string& type, const std::string& name)
+        : os(os), type(type), name(name) {}
+
+    void render_var(const char* var) override {
+        if (strcmp(var, "type") == 0) {
+            os << type;
+        } else if (strcmp(var, "name") == 0) {
+            os << name;
+        } else {
+            UNREACHABLE();
+        }
+    }
+
+    FORBID_COPY(GenEnumElem);
+};
+
+const char* gen_cond_enum_elem(Scratchbuf& buf, const opt_t* opts, const std::string& name) {
+    const std::string& cond = opts->cond_enum_prefix + name;
+    GenEnumElem callback(buf.stream(), opts->api_cond_type, cond);
+    opts->eval_code_conf(buf.stream(), "code:enum_elem", callback);
+    return buf.flush();
 }
 
 static void emit_rule(Output& output, CodeList* stmts, const Adfa& dfa, size_t rule_idx) {
@@ -950,7 +982,7 @@ static void emit_rule(Output& output, CodeList* stmts, const Adfa& dfa, size_t r
     // Condition in the semantic action is the one set with => or :=> rule.
     const char* cond = semact->cond == nullptr ? dfa.cond.c_str() : semact->cond;
     // Next condition is either the one specified in semantic action, or the current one.
-    const char* next_cond = o.str(opts->cond_enum_prefix).cstr(cond).flush();
+    const char* next_cond = gen_cond_enum_elem(o, opts, cond);
     // Next state is normally -1 (the initial storable state corresponding to no YYFILL invocation),
     // but in the loop/switch mode conditions and storable states are both implemented via
     // `yystate`, so the next state is the next condition.
@@ -978,9 +1010,9 @@ static void emit_rule(Output& output, CodeList* stmts, const Adfa& dfa, size_t r
     if (!semact->autogen) {
         // User-defined semantic action.
         if (!dfa.setup.empty()) append(stmts, code_text(alc, o.str(dfa.setup).flush()));
-        append(stmts, code_line_info_input(alc, opts->lang, semact->loc));
+        if (opts->line_dirs) append(stmts, code_line_info_input(alc, semact->loc));
         append(stmts, code_text(alc, o.cstr(semact->text).flush()));
-        append(stmts, code_line_info_output(alc, opts->lang));
+        if (opts->line_dirs) append(stmts, code_line_info_output(alc));
     } else if (opts->loop_switch) {
         // Autogenerated action for the :=> rule, loop/switch mode: set `yystate` to the initial
         // state of the next condition and continue to the head of the loop.
@@ -1149,8 +1181,7 @@ void wrap_dfas_in_loop_switch(Output& output, CodeList* stmts, CodeCases* cases)
 
     CodeList* loop = code_list(alc);
     gen_storable_state_cases(output, cases);
-    if (opts->state_abort || opts->lang != Lang::C) {
-        // Do not abort by default in C/C++ as it requires including a header.
+    if (opts->state_abort || opts->eval_bool_conf("abort_in_default_case")) {
         CodeList* abort = code_list(alc);
         append(abort, code_abort(alc));
         append(cases, code_case_default(alc, abort));
@@ -1366,81 +1397,12 @@ LOCAL_NODISCARD(Ret expand_tags_directive(Output& output, Code* code)) {
     return Ret::OK;
 }
 
-class GenEnum : public OutputCallback {
-    OutAllocator& alc;
-    Scratchbuf& buf;
-    const opt_t* opts;
-    const StartConds& conds;
-    size_t curr_cond;
-    size_t last_cond;
-
-  public:
-    CodeList* code;
-
-    GenEnum(OutAllocator& alc, Scratchbuf& buf, const opt_t* opts, const StartConds& conds)
-            : alc(alc)
-            , buf(buf)
-            , opts(opts)
-            , conds(conds)
-            , curr_cond(0)
-            , last_cond(0)
-            , code(nullptr) {
-        code = code_list(alc);
-    }
-
-    void render_var(const char* var) override {
-        if (strcmp(var, "name") == 0) {
-            buf.str(opts->api_cond_type);
-        } else if (strcmp(var, "elem") == 0) {
-            buf.str(conds[curr_cond].name);
-        } else if (strcmp(var, "init") == 0) {
-            buf.u32(conds[curr_cond].number);
-        // TODO: handle global variables in a uniform way
-        } else if (strcmp(var, "nl") == 0) {
-            append(code, code_text(alc, buf.flush()));
-        } else if (strcmp(var, "indent") == 0) {
-            // TODO:  indent here means not what it means in render context
-            buf.str(opts->indent_str);
-        } else {
-            UNREACHABLE();
-        }
-    }
-
-    size_t get_list_size(const char* var) const override {
-        if (strcmp(var, "elem") == 0) {
-            return conds.size();
-        }
-        UNREACHABLE();
-        return 0;
-    }
-
-    void start_list(const char* var, size_t lbound, size_t rbound) override {
-        if (strcmp(var, "elem") == 0) {
-            curr_cond = lbound;
-            last_cond = rbound;
-        } else {
-            UNREACHABLE();
-        }
-    }
-
-    bool next_in_list(const char* var) override {
-        if (strcmp(var, "elem") == 0) {
-            return ++curr_cond <= last_cond;
-        } else {
-            UNREACHABLE();
-        }
-        return false;
-    }
-
-    FORBID_COPY(GenEnum);
-};
-
-static void gen_cond_enum(Scratchbuf& buf,
-                          OutAllocator& alc,
-                          Stx& stx,
-                          Code* code,
-                          const opt_t* opts,
-                          const StartConds& conds) {
+static void gen_cond_enum(
+        Scratchbuf& buf,
+        OutAllocator& alc,
+        Code* code,
+        const opt_t* opts,
+        const StartConds& conds) {
     DCHECK(opts->target == Target::CODE);
 
     if (conds.empty()) return;
@@ -1469,12 +1431,17 @@ static void gen_cond_enum(Scratchbuf& buf,
         code->raw.size = buf.stream().str().length();
         code->raw.data = buf.flush();
     } else {
-        GenEnum callback(alc, buf, opts, conds);
-        stx.gen_code(buf.stream(), opts, "code:cond_enum", callback);
-
-        code->kind = CodeKind::BLOCK;
-        code->block.kind = CodeBlock::Kind::RAW;
-        code->block.stmts = callback.code;
+        // prepare an array of enum member names
+        const char** ids = alc.alloct<const char*>(conds.size()), **i = ids;
+        for (const StartCond& cond : conds) *i++ = buf.str(cond.name).flush();
+        // prepare an array of enum member numbers (only needed in loop/switch mode)
+        uint32_t* nums = nullptr;
+        if (opts->loop_switch) {
+            uint32_t* j = nums = alc.alloct<uint32_t>(conds.size());
+            for (const StartCond& cond : conds) *j++ = cond.number;
+        }
+        // construct enum code item in place of the old code item
+        init_code_enum(code, opts->api_cond_type.c_str(), conds.size(), ids, nums);
     }
 }
 
@@ -1543,7 +1510,7 @@ LOCAL_NODISCARD(Ret expand_cond_enum(Output& output, Code* code)) {
         return Ret::OK;
     }
 
-    gen_cond_enum(buf, alc, output.stx, code, globopts, conds);
+    gen_cond_enum(buf, alc, code, globopts, conds);
     return Ret::OK;
 }
 
@@ -1627,8 +1594,13 @@ static CodeList* gen_cond_goto(Output& output) {
                 text = buf.cstr("goto ").str(opts->cond_label_prefix).str(cond.name).flush();
                 append(body, code_stmt(alc, text));
 
-                text = buf.str(opts->cond_enum_prefix).str(cond.name).flush();
+                text = gen_cond_enum_elem(buf, opts, cond.name);
                 append(ccases, code_case_string(alc, body, text));
+            }
+            if (opts->eval_bool_conf("abort_in_default_case")) {
+                CodeList* abort = code_list(alc);
+                append(abort, code_abort(alc));
+                append(ccases, code_case_default(alc, abort));
             }
             text = buf.str(output_cond_get(opts)).flush();
             append(stmts, code_switch(alc, text, ccases));
@@ -1647,16 +1619,17 @@ static CodeList* gen_cond_goto(Output& output) {
 static CodeList* gen_cond_table(Output& output) {
     const opt_t* opts = output.block().opts;
     OutAllocator& alc = output.allocator;
+    Scratchbuf& buf = output.scratchbuf;
     const StartConds& conds = output.block().conds;
 
     CodeList* code = code_list(alc);
     const char** elems = alc.alloct<const char*>(conds.size());
     for (size_t i = 0; i < conds.size(); ++i) {
-        elems[i] = output.scratchbuf.cstr("&&")
-                .str(opts->cond_label_prefix).str(conds[i].name).flush();
+        elems[i] = buf.cstr("&&").str(opts->cond_label_prefix).str(conds[i].name).flush();
     }
-    append(code, code_table(
-            alc, opts->var_cond_table.c_str(), "static const void*", elems, conds.size()));
+    opts->eval_code_conf(buf.stream(), "code:type_yytarget");
+    const char* type = buf.flush();
+    append(code, code_array(alc, opts->var_cond_table.c_str(), type, elems, conds.size()));
     return code;
 }
 
@@ -1684,7 +1657,7 @@ static Code* gen_yystate_def(Output& output) {
         type = VarType::UINT;
         init = "0";
     }
-    return code_var(output.allocator, type, opts->var_state, init);
+    return code_var(output.allocator, type, opts->var_state.c_str(), init);
 }
 
 static size_t max_among_blocks(const blocks_t& blocks, size_t max, CodeKind kind) {
@@ -1694,7 +1667,7 @@ static size_t max_among_blocks(const blocks_t& blocks, size_t max, CodeKind kind
     return max;
 }
 
-LOCAL_NODISCARD(Ret gen_yymax(Output&  output, Code* code)) {
+LOCAL_NODISCARD(Ret gen_yymax(Output& output, Code* code)) {
     const opt_t* opts = output.block().opts;
     Scratchbuf& buf = output.scratchbuf;
 
@@ -1719,23 +1692,13 @@ LOCAL_NODISCARD(Ret gen_yymax(Output&  output, Code* code)) {
     }
 
     if (code->fmt.format) {
-        std::ostringstream os(code->fmt.format);
-        argsubst(os, opts->api_sigil, "max", true, max);
-        code->text = buf.str(os.str()).flush();
+        buf.cstr(code->fmt.format);
+        argsubst(buf.stream(), opts->api_sigil, "max", true, max);
+        code->text = buf.flush();
+        code->kind = CodeKind::TEXT;
     } else {
-        switch (opts->lang) {
-        case Lang::C:
-            code->text = buf.cstr("#define ").cstr(varname).cstr(" ").u64(max).flush();
-            break;
-        case Lang::GO:
-            code->text = buf.cstr("var ").cstr(varname).cstr(" int = ").u64(max).flush();
-            break;
-        case Lang::RUST:
-            code->text = buf.cstr("const ").cstr(varname).cstr(": usize = ").u64(max).flush();
-            break;
-        }
+        init_code_const(code, VarType::UINT, varname, buf.u64(max).flush());
     }
-    code->kind = (opts->lang == Lang::C) ? CodeKind::TEXT : CodeKind::STMT;
     return Ret::OK;
 }
 
@@ -1798,12 +1761,11 @@ CodeList* gen_bitmap(Output& output, const CodeBitmap* bitmap, const std::string
 
     const char *name = buf.str(bitmap_name(opts, cond)).flush();
 
-    OutputCallback dummy;
-    output.stx.gen_code(buf.stream(), opts, "code:type_yybm", dummy);
+    opts->eval_code_conf(buf.stream(), "code:type_yybm");
     const char* type = buf.flush();
 
     CodeList* stmts = code_list(alc);
-    append(stmts, code_table(alc, name, type, elems, nelems, /*tabulate*/ true));
+    append(stmts, code_array(alc, name, type, elems, nelems, /*tabulate*/ true));
     return stmts;
 }
 
@@ -1818,18 +1780,18 @@ LOCAL_NODISCARD(Ret gen_block_code(Output& output, const Adfas& dfas, CodeList* 
     const bool is_cond_block = !dfas.front()->cond.empty();
 
     append(program, code_newline(alc)); // the following #line info must start at zero indent
-    append(program, code_line_info_output(alc, opts->lang));
+    if (opts->line_dirs) append(program, code_line_info_output(alc));
 
     CodeList* code = code_list(alc);
     bool local_decls = false;
 
     if (!opts->storable_state && opts->char_emit) {
         local_decls = true;
-        append(code, code_var(alc, VarType::YYCTYPE, opts->var_char, nullptr));
+        append(code, code_var(alc, VarType::YYCTYPE, opts->var_char.c_str(), nullptr));
     }
     if (!opts->storable_state && oblock.used_yyaccept) {
         local_decls = true;
-        append(code, code_var(alc, VarType::UINT, opts->var_accept, "0"));
+        append(code, code_var(alc, VarType::UINT, opts->var_accept.c_str(), "0"));
     }
 
     if (opts->loop_switch) {
@@ -1994,32 +1956,8 @@ LOCAL_NODISCARD(Ret codegen_generate_block(Output& output)) {
         case CodeKind::MAXNMATCH:
             CHECK_RET(gen_yymax(output, code));
             break;
-        case CodeKind::EMPTY:
-        case CodeKind::IF_THEN_ELSE:
-        case CodeKind::SWITCH:
-        case CodeKind::BLOCK:
-        case CodeKind::FUNC:
-        case CodeKind::SKIP:
-        case CodeKind::PEEK:
-        case CodeKind::BACKUP:
-        case CodeKind::PEEK_SKIP:
-        case CodeKind::SKIP_PEEK:
-        case CodeKind::SKIP_BACKUP:
-        case CodeKind::BACKUP_SKIP:
-        case CodeKind::BACKUP_PEEK:
-        case CodeKind::BACKUP_PEEK_SKIP:
-        case CodeKind::SKIP_BACKUP_PEEK:
-        case CodeKind::LINE_INFO_INPUT:
-        case CodeKind::LINE_INFO_OUTPUT:
-        case CodeKind::VAR:
-        case CodeKind::STMT:
-        case CodeKind::LOOP:
-        case CodeKind::TEXT:
-        case CodeKind::TEXT_RAW:
-        case CodeKind::RAW:
-        case CodeKind::LABEL:
-        case CodeKind::ABORT:
-        case CodeKind::TABLE:
+        default:
+            // skip for now, leave the rest for the render phase
             break;
         }
     }

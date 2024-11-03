@@ -493,7 +493,7 @@ static void codegen_analyze_block(Output& output) {
     const opt_t* opts = block.opts;
 
     Code* code = block.code->head;
-    if (code->kind != CodeKind::DFAS) {
+    if (code == nullptr || code->kind != CodeKind::DFAS) {
         return;
     } else if (dfas.empty()) {
         code->kind = CodeKind::EMPTY;
@@ -589,12 +589,6 @@ void codegen_analyze(Output& output) {
         for (OutputBlock* b : bs) {
             output.set_current_block(b);
             codegen_analyze_block(output);
-        }
-
-        // If the first block contains only whitespace and no user code, then it should "inherit"
-        // options from the second block.
-        if (bs.size() > 1 && !bs[0]->have_user_code) {
-            *const_cast<opt_t*>(bs[0]->opts) = *bs[1]->opts;
         }
     }
 

@@ -1,9 +1,11 @@
+#include <time.h>
+
 #include "config.h"
 #include "src/codegen/helpers.h"
 #include "src/codegen/output.h"
-#include "src/codegen/syntax.h"
 #include "src/msg/msg.h"
 #include "src/options/opt.h"
+#include "src/options/syntax.h"
 #include "src/util/check.h"
 #include "src/util/file_utils.h"
 
@@ -47,6 +49,17 @@ static void render_global_var(RenderContext& rctx, const char* var) {
     }
 }
 
+class RenderSimple : public RenderCallback {
+    RenderContext& rctx;
+
+  public:
+    RenderSimple(RenderContext& rctx): rctx(rctx) {}
+
+    virtual void render_var(const char* var) {
+        render_global_var(rctx, var);
+    }
+};
+
 static uint32_t count_lines_text(const char* text) {
     DCHECK(text);
     uint32_t lc = 0;
@@ -57,7 +70,7 @@ static uint32_t count_lines_text(const char* text) {
 }
 
 static inline void render_stmt_end(RenderContext& rctx, bool semi) {
-    if (semi && rctx.opts->lang != Lang::GO) rctx.os << ";";
+    if (semi && rctx.opts->eval_bool_conf("semicolons")) rctx.os << ";";
     rctx.os << std::endl;
     ++rctx.line;
 }
@@ -65,25 +78,6 @@ static inline void render_stmt_end(RenderContext& rctx, bool semi) {
 static void render_list(RenderContext& rctx, const CodeList* code) {
     for (const Code* s = code->head; s; s = s->next) {
         render(rctx, s);
-    }
-}
-
-static void render_line_info(
-        std::ostream& o, uint32_t line, const std::string& fname, const opt_t* opts) {
-    if (!opts->line_dirs) return;
-
-    switch (opts->lang) {
-    case Lang::GO:
-        // Go: //line <filename>:<line-number>
-        o << "//line \"" << fname << "\":" << line << "\n";
-        break;
-    case Lang::C:
-        // C/C++: #line <line-number> <filename>
-        o << "#line " << line << " \"" << fname << "\"\n";
-        break;
-    case Lang::RUST:
-        // For Rust line directives should be removed by `remove_empty` pass.
-        UNREACHABLE();
     }
 }
 
@@ -109,7 +103,7 @@ static void render_block(RenderContext& rctx, const CodeBlock* code) {
     }
 }
 
-class RenderVar : public OutputCallback {
+class RenderVar : public RenderCallback {
     RenderContext& rctx;
     const CodeVar* code;
 
@@ -122,13 +116,12 @@ class RenderVar : public OutputCallback {
         } else if (strcmp(var, "init") == 0) {
             rctx.os << code->init;
         } else if (strcmp(var, "type") == 0) {
-            OutputCallback callback; // dummy callback, these configurations have no variables
             switch (code->type) {
             case VarType::INT:
-                rctx.stx.gen_code(rctx.os, rctx.opts, "code:type_int", callback);
+                rctx.opts->eval_code_conf(rctx.os, "code:type_int");
                 break;
             case VarType::UINT:
-                rctx.stx.gen_code(rctx.os, rctx.opts, "code:type_uint", callback);
+                rctx.opts->eval_code_conf(rctx.os, "code:type_uint");
                 break;
             case VarType::YYCTYPE:
                 rctx.os << rctx.opts->api_char_type;
@@ -149,7 +142,7 @@ class RenderVar : public OutputCallback {
     FORBID_COPY(RenderVar);
 };
 
-class RenderIfThenElse : public OutputCallback {
+class RenderIfThenElse : public RenderCallback {
     RenderContext& rctx;
     const CodeIfTE* code;
     const Code* curr_stmt;
@@ -237,28 +230,7 @@ class RenderIfThenElse : public OutputCallback {
     FORBID_COPY(RenderIfThenElse);
 };
 
-static void render_number(RenderContext& rctx, int64_t num, VarType type) {
-    std::ostringstream& os = rctx.os;
-    const opt_t* opts = rctx.opts;
-    const Enc& enc = opts->encoding;
-    bool hex = opts->lang == Lang::RUST || enc.type() == Enc::Type::EBCDIC;
-
-    switch (type) {
-    case VarType::UINT:
-        DCHECK(num >= 0);
-        os << static_cast<uint32_t>(num);
-        break;
-    case VarType::INT:
-        os << num;
-        break;
-    case VarType::YYCTYPE:
-        DCHECK(num >= 0);
-        print_char_or_hex(os, static_cast<uint32_t>(num), enc.cunit_size(), hex, /*dot*/ false);
-        break;
-    }
-}
-
-class RenderSwitchCaseDefault : public OutputCallback {
+class RenderSwitchCaseDefault : public RenderCallback {
     RenderContext& rctx;
 
   public:
@@ -269,7 +241,7 @@ class RenderSwitchCaseDefault : public OutputCallback {
     }
 };
 
-class RenderSwitchCaseRange : public OutputCallback {
+class RenderSwitchCaseRange : public RenderCallback {
     RenderContext& rctx;
     const CodeCase* code;
     size_t curr_range;
@@ -306,7 +278,22 @@ class RenderSwitchCaseRange : public OutputCallback {
             case CodeCase::Kind::RANGES: {
                 DCHECK(curr_range < code->ranges->size && curr_sym < nsyms);
                 int64_t sym = code->ranges->elems[2*curr_range] + static_cast<int64_t>(curr_sym);
-                render_number(rctx, sym, code->ranges->type);
+                switch (code->ranges->type) {
+                case VarType::UINT:
+                    DCHECK(sym >= 0);
+                    // fallthrough
+                case VarType::INT:
+                    rctx.os << sym;
+                    break;
+                case VarType::YYCTYPE: {
+                    DCHECK(sym >= 0);
+                    Enc enc = rctx.opts->encoding;
+                    bool hex = enc.type() == Enc::Type::EBCDIC
+                        || strcmp(rctx.opts->eval_word_conf("char_literals"), "hexadecimal") == 0;
+                    print_char_or_hex(
+                        rctx.os, static_cast<uint32_t>(sym), enc.cunit_size(), hex, /*dot*/ false);
+                    break;
+                }}
                 break;
             }}
         } else {
@@ -350,7 +337,7 @@ class RenderSwitchCaseRange : public OutputCallback {
     FORBID_COPY(RenderSwitchCaseRange);
 };
 
-class RenderSwitchCaseBlock : public OutputCallback {
+class RenderSwitchCaseBlock : public RenderCallback {
     RenderContext& rctx;
     const CodeCase* code;
     const Code* curr_stmt;
@@ -380,14 +367,14 @@ class RenderSwitchCaseBlock : public OutputCallback {
             switch (code->kind) {
             case CodeCase::Kind::DEFAULT: {
                 RenderSwitchCaseDefault callback(rctx);
-                rctx.stx.gen_code(rctx.os, rctx.opts, "code:switch_case_default", callback);
+                rctx.opts->eval_code_conf(rctx.os, "code:switch_case_default", callback);
                 break;
             }
             case CodeCase::Kind::NUMBER:
             case CodeCase::Kind::STRING:
             case CodeCase::Kind::RANGES: {
                 RenderSwitchCaseRange callback(rctx, code, curr_range);
-                rctx.stx.gen_code(rctx.os, rctx.opts, "code:switch_case_range", callback);
+                rctx.opts->eval_code_conf(rctx.os, "code:switch_case_range", callback);
                 break;
             }}
         } else if (strcmp(var, "stmt") == 0) {
@@ -438,7 +425,7 @@ class RenderSwitchCaseBlock : public OutputCallback {
     FORBID_COPY(RenderSwitchCaseBlock);
 };
 
-class RenderSwitch : public OutputCallback {
+class RenderSwitch : public RenderCallback {
     RenderContext& rctx;
     const CodeSwitch* code;
     const CodeCase* curr_case;
@@ -459,11 +446,11 @@ class RenderSwitch : public OutputCallback {
         if (strcmp(var, "expr") == 0) {
             rctx.os << code->expr;
         } else if (strcmp(var, "case") == 0) {
-            bool oneline = rctx.stx.specialize_oneline_switch()
+            bool oneline = rctx.opts->specialize_oneline_switch()
                     && oneline_stmt_list(curr_case->body);
             const char* conf = oneline ? "code:switch_cases_oneline" : "code:switch_cases";
             RenderSwitchCaseBlock callback(rctx, curr_case, oneline);
-            rctx.stx.gen_code(rctx.os, rctx.opts, conf, callback);
+            rctx.opts->eval_code_conf(rctx.os, conf, callback);
         } else {
             render_global_var(rctx, var);
         }
@@ -498,7 +485,7 @@ class RenderSwitch : public OutputCallback {
     FORBID_COPY(RenderSwitch);
 };
 
-class RenderLoop : public OutputCallback {
+class RenderLoop : public RenderCallback {
     RenderContext& rctx;
     const CodeList* code;
     const Code* curr_stmt;
@@ -628,27 +615,38 @@ static inline void yych_conv(std::ostream& os, const opt_t* opts) {
     }
 }
 
-void gen_peek_expr(std::ostream& os, const opt_t* opts) {
-    yych_conv(os, opts);
-    if (opts->api == Api::DEFAULT) {
-        os << "*" << opts->api_cursor;
-    } else if (opts->lang == Lang::RUST) {
-        if (opts->unsafe) os << "unsafe {";
-        os << opts->api_peek;
-        if (opts->api_style == ApiStyle::FUNCTIONS) os << "()";
-        if (opts->unsafe) os << "}";
-    } else {
-        os << opts->api_peek;
-        if (opts->api_style == ApiStyle::FUNCTIONS) os << "()";
+class RenderPeek : public RenderCallback {
+    RenderContext& rctx;
+
+  public:
+    RenderPeek(RenderContext& rctx): rctx(rctx) {}
+
+    void render_var(const char* var) override {
+        if (strcmp(var, "peek") == 0) {
+            rctx.os << rctx.opts->api_peek;
+        } else if (strcmp(var, "cursor") == 0) {
+            rctx.os << rctx.opts->api_cursor;
+        } else if (strcmp(var, "typecast") == 0) {
+            yych_conv(rctx.os, rctx.opts);
+        } else {
+            render_global_var(rctx, var);
+        }
     }
+};
+
+static void render_debug(RenderContext& rctx, const CodeLabel& code) {
+    rctx.os << indent(rctx.ind, rctx.opts->indent_str) << rctx.opts->api_debug
+            << "(" << code.nlabel->index << ", ";
+    RenderPeek callback(rctx);
+    rctx.opts->eval_code_conf(rctx.os, "code:yypeek_expr", callback);
+    rctx.os << ")";
+    render_stmt_end(rctx, true);
 }
 
 static void render_peek(RenderContext& rctx) {
-    std::ostringstream& os = rctx.os;
-    const opt_t* opts = rctx.opts;
-
-    os << indent(rctx.ind, opts->indent_str) << opts->var_char << " = ";
-    gen_peek_expr(os, opts);
+    rctx.os << indent(rctx.ind, rctx.opts->indent_str) << rctx.opts->var_char << " = ";
+    RenderPeek callback(rctx);
+    rctx.opts->eval_code_conf(rctx.os, "code:yypeek_expr", callback);
     render_stmt_end(rctx, true);
 }
 
@@ -762,27 +760,6 @@ static void render_backup_peek_skip(RenderContext& rctx) {
     render_stmt_end(rctx, true);
 }
 
-static void render_abort(RenderContext& rctx) {
-    std::ostringstream& os = rctx.os;
-    const opt_t* opts = rctx.opts;
-
-    os << indent(rctx.ind, opts->indent_str);
-    switch (opts->lang) {
-    case Lang::C:
-        DCHECK(opts->state_abort);
-        os << "abort();";
-        break;
-    case Lang::GO:
-        os << "panic(\"internal lexer error\")";
-        break;
-    case Lang::RUST:
-        os << "panic!(\"internal lexer error\")";
-        break;
-    }
-    os << std::endl;
-    ++rctx.line;
-}
-
 static void render_label(RenderContext& rctx, const CodeLabel& label) {
     if (label.kind == CodeLabel::Kind::SLABEL) {
         rctx.os << label.slabel << ":" << std::endl;
@@ -794,9 +771,9 @@ static void render_label(RenderContext& rctx, const CodeLabel& label) {
     }
 }
 
-class RenderTable : public OutputCallback {
+class RenderArray : public RenderCallback {
     RenderContext& rctx;
-    const CodeTable* code;
+    const CodeArray* code;
     const size_t ncols;
     const size_t nrows;
     size_t curr_col;
@@ -806,7 +783,7 @@ class RenderTable : public OutputCallback {
     size_t maxlen;
 
   public:
-    RenderTable(RenderContext& rctx, const CodeTable* code)
+    RenderArray(RenderContext& rctx, const CodeArray* code)
             : rctx(rctx)
             , code(code)
             , ncols(code->tabulate ? 8 : 1)
@@ -830,6 +807,8 @@ class RenderTable : public OutputCallback {
             rctx.os << code->type;
         } else if (strcmp(var, "size") == 0) {
             rctx.os << code->size;
+        } else if (strcmp(var, "row") == 0) {
+            // do nothing
         } else if (strcmp(var, "elem") == 0) {
             const char* e = code->elems[curr_row * ncols + curr_col];
             if (code->tabulate) {
@@ -875,7 +854,120 @@ class RenderTable : public OutputCallback {
         return false;
     }
 
-    FORBID_COPY(RenderTable);
+    FORBID_COPY(RenderArray);
+};
+
+class RenderEnum : public RenderCallback {
+    RenderContext& rctx;
+    const CodeEnum* code;
+    size_t curr_elem;
+    size_t last_elem;
+
+  public:
+    RenderEnum(RenderContext& rctx, const CodeEnum* code)
+            : rctx(rctx), code(code), curr_elem(0), last_elem(0) {}
+
+    void render_var(const char* var) override {
+        if (strcmp(var, "name") == 0) {
+            rctx.os << code->name;
+        } else if (strcmp(var, "type") == 0) {
+            rctx.opts->eval_code_conf(rctx.os, "code:type_cond_enum");
+        } else if (strcmp(var, "elem") == 0) {
+            rctx.os << code->elem_ids[curr_elem];
+        } else if (strcmp(var, "init") == 0) {
+            rctx.os << code->elem_nums[curr_elem];
+        } else {
+            render_global_var(rctx, var);
+        }
+    }
+
+    size_t get_list_size(const char* var) const override {
+        if (strcmp(var, "elem") == 0) {
+            return code->size;
+        }
+        UNREACHABLE();
+        return 0;
+    }
+
+    void start_list(const char* var, size_t lbound, size_t rbound) override {
+        if (strcmp(var, "elem") == 0) {
+            curr_elem = lbound;
+            last_elem = rbound;
+        } else {
+            UNREACHABLE();
+        }
+    }
+
+    bool next_in_list(const char* var) override {
+        if (strcmp(var, "elem") == 0) {
+            return ++curr_elem <= last_elem;
+        } else {
+            UNREACHABLE();
+        }
+        return false;
+    }
+
+    bool eval_cond(const char* cond) override {
+        if (strcmp(cond, "have_init") == 0) {
+            return code->elem_nums != nullptr;
+        }
+        UNREACHABLE();
+        return false;
+    }
+
+    FORBID_COPY(RenderEnum);
+};
+
+class RenderFingerprint : public RenderCallback {
+    RenderContext& rctx;
+
+  public:
+    RenderFingerprint(RenderContext& rctx): rctx(rctx) {}
+
+    void render_var(const char* var) override {
+        if (strcmp(var, "version") == 0) {
+            rctx.os << PACKAGE_VERSION;
+        } else if (strcmp(var, "date") == 0) {
+            time_t now = time(nullptr);
+            rctx.os.write(ctime(&now), 24);
+        } else {
+            render_global_var(rctx, var);
+        }
+    }
+
+    bool eval_cond(const char* cond) override {
+        if (strcmp(cond, "have_version") == 0) {
+            return rctx.opts->version;
+        } else if (strcmp(cond, "have_date") == 0) {
+            return rctx.opts->date;
+        }
+        UNREACHABLE();
+        return false;
+    }
+
+    FORBID_COPY(RenderFingerprint);
+};
+
+class RenderLineInfo : public RenderCallback {
+    RenderContext& rctx;
+    uint32_t line;
+    const std::string& file;
+
+  public:
+    RenderLineInfo(RenderContext& rctx, uint32_t line, const std::string& file)
+            : rctx(rctx), line(line), file(file) {}
+
+    void render_var(const char* var) override {
+        if (strcmp(var, "line") == 0) {
+            rctx.os << line;
+        } else if (strcmp(var, "file") == 0) {
+            rctx.os << file;
+        } else {
+            render_global_var(rctx, var);
+        }
+    }
+
+    FORBID_COPY(RenderLineInfo);
 };
 
 static void render(RenderContext& rctx, const Code* code) {
@@ -888,18 +980,18 @@ static void render(RenderContext& rctx, const Code* code) {
     case CodeKind::EMPTY:
         break;
     case CodeKind::IF_THEN_ELSE: {
-        bool oneline = rctx.stx.specialize_oneline_if()
+        bool oneline = rctx.opts->specialize_oneline_if()
             && code->ifte.oneline
             && oneline_stmt_list(code->ifte.if_code)
             && code->ifte.else_code == nullptr;
         RenderIfThenElse callback(rctx, &code->ifte, oneline);
         const char* conf = oneline ? "code:if_then_oneline" : "code:if_then_else";
-        rctx.stx.gen_code(rctx.os, rctx.opts, conf, callback);
+        rctx.opts->eval_code_conf(rctx.os, conf, callback);
         break;
     }
     case CodeKind::SWITCH: {
         RenderSwitch callback(rctx, &code->swch);
-        rctx.stx.gen_code(rctx.os, rctx.opts, "code:switch", callback);
+        rctx.opts->eval_code_conf(rctx.os, "code:switch", callback);
         break;
     }
     case CodeKind::BLOCK:
@@ -910,7 +1002,7 @@ static void render(RenderContext& rctx, const Code* code) {
         break;
     case CodeKind::LOOP: {
         RenderLoop callback(rctx, code->loop);
-        rctx.stx.gen_code(rctx.os, rctx.opts, "code:loop", callback);
+        rctx.opts->eval_code_conf(rctx.os, "code:loop", callback);
         break;
     }
     case CodeKind::TEXT_RAW:
@@ -932,9 +1024,11 @@ static void render(RenderContext& rctx, const Code* code) {
             if (code->raw.data[i] == '\n') ++line;
         }
         break;
-    case CodeKind::ABORT:
-        render_abort(rctx);
+    case CodeKind::ABORT: {
+        RenderSimple callback(rctx);
+        rctx.opts->eval_code_conf(rctx.os, "code:abort", callback);
         break;
+    }
     case CodeKind::SKIP:
         render_skip(rctx);
         break;
@@ -965,27 +1059,47 @@ static void render(RenderContext& rctx, const Code* code) {
     case CodeKind::SKIP_BACKUP_PEEK:
         render_skip_backup_peek(rctx);
         break;
-    case CodeKind::LINE_INFO_INPUT:
-        render_line_info(os, code->loc.line, rctx.msg.filenames[code->loc.file], opts);
-        ++line;
+    case CodeKind::LINE_INFO_INPUT: {
+        RenderLineInfo callback(rctx, code->loc.line, rctx.msg.filenames[code->loc.file]);
+        rctx.opts->eval_code_conf(rctx.os, "code:line_info", callback);
         break;
-    case CodeKind::LINE_INFO_OUTPUT:
-        render_line_info(os, rctx.line + 1, rctx.file, opts);
-        ++line;
+    }
+    case CodeKind::LINE_INFO_OUTPUT: {
+        RenderLineInfo callback(rctx, rctx.line + 1, rctx.file);
+        rctx.opts->eval_code_conf(rctx.os, "code:line_info", callback);
         break;
+    }
+    case CodeKind::FINGERPRINT: {
+        RenderFingerprint callback(rctx);
+        rctx.opts->eval_code_conf(rctx.os, "code:fingerprint", callback);
+        break;
+    }
     case CodeKind::VAR: {
         RenderVar callback(rctx, &code->var);
-        rctx.stx.gen_code(rctx.os, rctx.opts, "code:var", callback);
+        rctx.opts->eval_code_conf(rctx.os, "code:var", callback);
+        break;
+    }
+    case CodeKind::CONST: {
+        RenderVar callback(rctx, &code->var); // same code item as for `CodeKind::VAR`
+        rctx.opts->eval_code_conf(rctx.os, "code:const", callback);
+        break;
+    }
+    case CodeKind::ARRAY: {
+        RenderArray callback(rctx, &code->array);
+        rctx.opts->eval_code_conf(rctx.os, "code:array", callback);
+        break;
+    }
+    case CodeKind::ENUM: {
+        RenderEnum callback(rctx, &code->enumr);
+        rctx.opts->eval_code_conf(rctx.os, "code:enum", callback);
         break;
     }
     case CodeKind::LABEL:
         render_label(rctx, code->label);
         break;
-    case CodeKind::TABLE: {
-        RenderTable callback(rctx, code->table);
-        rctx.stx.gen_code(rctx.os, rctx.opts, "code:array", callback);
+    case CodeKind::DEBUG:
+        render_debug(rctx, code->label); // same code item as for `CodeKind::LABEL`
         break;
-    }
     case CodeKind::STAGS:
     case CodeKind::MTAGS:
     case CodeKind::MAXFILL:
@@ -1037,7 +1151,7 @@ LOCAL_NODISCARD(Ret codegen_render_blocks(
 
     // Second code generation pass: expand labels, combine/simplify statements, convert newlines,
     // write the generated code to a file.
-    RenderContext rctx(output.stx, output.msg, filename);
+    RenderContext rctx(output.msg, filename);
     for (const OutputBlock* b : blocks) {
         rctx.opts = b->opts;
         rctx.ind = b->opts->indent_top;

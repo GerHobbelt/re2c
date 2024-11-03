@@ -1,11 +1,13 @@
 #include "src/msg/msg.h"
 #include "src/options/opt.h"
+#include "src/options/syntax.h"
 #include "src/parse/input.h"
+#include "src/util/string_utils.h"
 
 namespace re2c {
 
 // This function should only change global options.
-LOCAL_NODISCARD(Ret fix_conopt(conopt_t& glob)) {
+LOCAL_NODISCARD(Ret fix_conopt(conopt_t& glob, Stx& stx)) {
     if (glob.target == Target::DOT) {
         glob.line_dirs = false;
     } else if (glob.target == Target::SKELETON) {
@@ -13,11 +15,9 @@ LOCAL_NODISCARD(Ret fix_conopt(conopt_t& glob)) {
         glob.line_dirs = false;
     }
 
-    if (glob.lang == Lang::RUST) {
-        glob.loop_switch = true;
-        // No line directives in Rust: https://github.com/rust-lang/rfcs/issues/1862
-        glob.line_dirs = false;
-    }
+    if (!stx.have_conf("code:line_info")) glob.line_dirs = false;
+
+    if (strcmp(stx.list_conf_head("jump_model"), "loop_switch") == 0) glob.loop_switch = true;
 
     // append directory separator '/' to all paths that do not have it
     for (std::string& p : glob.include_paths) {
@@ -37,24 +37,36 @@ LOCAL_NODISCARD(Ret fix_conopt(conopt_t& glob)) {
         RET_FAIL(error("cannot generate dep file, output file not specified"));
     }
 
+    if (glob.target == Target::SKELETON && !stx.list_conf_find("target", "skeleton")) {
+        RET_FAIL(error("skeleton is not supported for this backend"));
+    }
+
     return Ret::OK;
 }
 
-// This function should only change mutable option defaults (based on the global options).
-static void fix_mutopt_defaults(const conopt_t& glob, mutopt_t& defaults) {
-    // For the Go and Rust backends generic API is set by default, because the default C API with
-    // pointers doesn't work (there is no pointer arithmetics in Go, and in Rust it is different
-    // enough from C). Use freeform generic API by default to make it less restrictive.
-    if (glob.lang != Lang::C) {
-        defaults.api = Api::CUSTOM;
-        defaults.api_style = ApiStyle::FREEFORM;
+// This should only change mutable option defaults (based on the global options / syntax file).
+LOCAL_NODISCARD(Ret fix_mutopt_defaults(mutopt_t& defaults, Stx& stx)) {
+    defaults.api = strcmp(stx.list_conf_head("api"), "default") == 0 ? Api::DEFAULT : Api::CUSTOM;
+    defaults.api_style = strcmp(stx.list_conf_head("api_style"), "functions") == 0
+            ? ApiStyle::FUNCTIONS : ApiStyle::FREEFORM;
+
+    if (strcmp(stx.eval_word_conf("constants"), "upper_case") == 0) {
+        defaults.cond_enum_prefix = "YYC_";
     }
+
+    CHECK_RET(stx.eval_str_conf("code:loop_label", defaults.label_loop));
+
+    const char* semi = stx.eval_bool_conf("semicolons") ? ";" : "";
+    defaults.cond_goto = "goto " + defaults.api_sigil + semi;
+
+    return Ret::OK;
 }
 
 // This function should only change real mutable options (based on the global options, default
 // mutable options and default flags). User-defined options are intentionally not passed to prevent
 // accidental change, and default flags are passed as read-only.
-LOCAL_NODISCARD(Ret fix_mutopt(const conopt_t& glob,
+LOCAL_NODISCARD(Ret fix_mutopt(const Stx& stx,
+                               const conopt_t& glob,
                                const mutopt_t& defaults,
                                const mutdef_t& is_default,
                                mutopt_t& real)) {
@@ -244,7 +256,8 @@ LOCAL_NODISCARD(Ret fix_mutopt(const conopt_t& glob,
     if (is_default.state_set_param)  real.state_set_param  = real.api_sigil;
     if (is_default.tags_expression)  real.tags_expression  = real.api_sigil;
     if (is_default.cond_goto) {
-        real.cond_goto = "goto " + real.cond_goto_param + (glob.lang == Lang::C ? ";" : "");
+        real.cond_goto = defaults.cond_goto;
+        strrreplace(real.cond_goto, defaults.cond_goto_param, real.cond_goto_param);
     }
     // "startlabel" configuration exists in two variants: string and boolean, and the string one
     // overrides the boolean one
@@ -262,31 +275,18 @@ LOCAL_NODISCARD(Ret fix_mutopt(const conopt_t& glob,
         real.cond_goto = defaults.cond_goto;
         real.cond_goto_param = defaults.cond_goto_param;
     }
-    if (glob.lang == Lang::RUST) {
-        // In Rust constants should be uppercase.
-        if (is_default.cond_enum_prefix) real.cond_enum_prefix = "YYC_";
-        // In Rust `continue` statements have labels, use it to avoid ambiguity.
-        if (is_default.label_loop) real.label_loop = "'yyl";
-    } else if (glob.lang == Lang::GO) {
-        // In Go `continue` statements have labels, use it to avoid ambiguity.
-        if (is_default.label_loop) real.label_loop = "yyl";
-    }
 
     // errors
-    if (glob.lang != Lang::C) {
-        if (glob.target == Target::SKELETON) {
-            RET_FAIL(error("skeleton is not supported for non-C backends"));
-        }
-        if (real.api == Api::DEFAULT) {
-            RET_FAIL(error("pointer API is not supported for non-C backends"));
-        }
-        if (real.cgoto) {
-            RET_FAIL(error("-g, --computed-gotos option is not supported for non-C backends"));
-        }
-        if (real.case_ranges) {
-            RET_FAIL(error("--case-ranges option is not supported for non-C backends"));
-        }
+    if (real.api == Api::DEFAULT && !stx.list_conf_find("api", "default")) {
+        RET_FAIL(error("default API is not supported for this backend"));
     }
+    if (real.cgoto && strcmp(stx.eval_word_conf("computed_goto"), "unsupported") == 0) {
+        RET_FAIL(error("-g, --computed-gotos option is not supported for this backend"));
+    }
+    if (real.case_ranges && strcmp(stx.eval_word_conf("case_ranges"), "unsupported") == 0) {
+        RET_FAIL(error("--case-ranges option is not supported for this backend"));
+    }
+    // TODO: check bitmaps and other optional features
     if (real.fill_eof != NOEOF) {
         if (real.bitmaps || real.cgoto) {
             RET_FAIL(error("configuration 're2c:eof' cannot be used with options -b, --bit-vectors "
@@ -328,8 +328,9 @@ LOCAL_NODISCARD(Ret fix_mutopt(const conopt_t& glob,
     return Ret::OK;
 }
 
-Opt::Opt(const conopt_t& globopts, Msg& msg)
-    : glob(globopts),
+Opt::Opt(OutAllocator& alc, Msg& msg)
+    : stx(alc),
+      glob(stx),
       symtab(),
       msg(msg),
       defaults(),
@@ -340,10 +341,10 @@ Opt::Opt(const conopt_t& globopts, Msg& msg)
 
 Ret Opt::fix_global_and_defaults() {
     // Allow to modify only the global options.
-    CHECK_RET(fix_conopt(const_cast<conopt_t&>(glob)));
+    CHECK_RET(fix_conopt(const_cast<conopt_t&>(glob), stx));
 
-    // Allow to modify only the mutable option defaults (based on the global options).
-    fix_mutopt_defaults(glob, const_cast<mutopt_t&>(defaults));
+    // Allow to modify only the mutable option defaults (based on the global options / syntax file).
+    CHECK_RET(fix_mutopt_defaults(const_cast<mutopt_t&>(defaults), stx));
 
     // Apply new defaults to all mutable options except those that have been explicitly defined by
     // the user.
@@ -371,7 +372,7 @@ Ret Opt::sync() {
 
     // Fix the real mutable options (based on the global options, mutable option defaults and
     // default flags), but do not change user-defined options or default flags.
-    CHECK_RET(fix_mutopt(glob, defaults, is_default, real));
+    CHECK_RET(fix_mutopt(stx, glob, defaults, is_default, real));
 
     diverge = false;
 
@@ -380,7 +381,7 @@ Ret Opt::sync() {
 
 Ret Opt::snapshot(const opt_t** opts) {
     CHECK_RET(sync());
-    *opts = new opt_t(glob, real, is_default, symtab);
+    *opts = new opt_t(stx, glob, real, is_default, symtab);
     return Ret::OK;
 }
 

@@ -1,12 +1,10 @@
 #include <stdio.h>
+#include <string.h>
 #include <iostream>
 
 #include "src/codegen/output.h"
-#include "src/codegen/syntax.h"
-
-extern const char* DEFAULT_SYNTAX_C;
-extern const char* DEFAULT_SYNTAX_GO;
-extern const char* DEFAULT_SYNTAX_RUST;
+#include "src/options/opt.h"
+#include "src/options/syntax.h"
 
 namespace re2c {
 
@@ -17,13 +15,12 @@ Stx::Stx(OutAllocator& alc)
         , allowed_code_confs()
         , allowed_conds()
         , allowed_vars()
-        , stack_expr()
-        , stack_code()
-        , stack_code_list()
         , confs()
         , have_oneline_if(false)
-        , have_oneline_switch(false) {
-    allowed_list_confs["api"] = {"pointers", "generic"};
+        , have_oneline_switch(false)
+        , stack_code()
+        , stack_code_list() {
+    allowed_list_confs["api"] = {"default", "generic"};
     allowed_list_confs["api_style"] = {"functions", "freeform"};
     allowed_list_confs["jump_model"] = {"goto_label", "loop_switch"};
     allowed_list_confs["target"] = {"code", "dot", "skeleton"};
@@ -33,7 +30,10 @@ Stx::Stx(OutAllocator& alc)
     allowed_word_confs["constants"] = {"snake_case", "upper_case"};
     allowed_word_confs["char_literals"] = {"hexadecimal", "symbolic"};
     allowed_word_confs["semicolons"] = {"yes", "no"};
-    allowed_word_confs["abort_requires_include"] = {"yes", "no"};
+    allowed_word_confs["abort_in_default_case"] = {"yes", "no"};
+    allowed_word_confs["implicit_bool_conversion"] = {"yes", "no"};
+    allowed_word_confs["backtick_quoted_strings"] = {"yes", "no"};
+    allowed_word_confs["standalone_single_quotes"] = {"yes", "no"};
 
     allowed_code_confs["code:var"] = {
         {"type", "name", "init"}, {}, {"have_init"}
@@ -46,7 +46,9 @@ Stx::Stx(OutAllocator& alc)
     };
     allowed_code_confs["code:type_int"] = {};
     allowed_code_confs["code:type_uint"] = {};
+    allowed_code_confs["code:type_cond_enum"] = {};
     allowed_code_confs["code:type_yybm"] = {};
+    allowed_code_confs["code:type_yytarget"] = {};
     allowed_code_confs["code:if_then_else"] = {
         {"then_cond", "else_cond"},
         {"then_stmt", "else_stmt"},
@@ -71,24 +73,25 @@ Stx::Stx(OutAllocator& alc)
     allowed_code_confs["code:loop"] = {
         {"label"}, {"stmt"}, {"have_label"}
     };
-    allowed_code_confs["code:cond_enum"] = {
-        {"name", "init"}, {"elem"}, {}
+    allowed_code_confs["code:loop_label"] = {};
+    allowed_code_confs["code:enum"] = {
+        {"name", "type", "init"}, {"elem"}, {"have_init"}
     };
-    allowed_code_confs["code:autogen_comment"] = {
-        {"version", "date"}, {}, {}
+    allowed_code_confs["code:enum_elem"] = {
+        {"name", "type"}, {}, {}
     };
-    allowed_code_confs["code:line_directive"] = {
+    allowed_code_confs["code:fingerprint"] = {
+        {"version", "date"}, {}, {"have_version", "have_date"}
+    };
+    allowed_code_confs["code:line_info"] = {
         {"line", "file"}, {}, {}
     };
     allowed_code_confs["code:label"] = {
         {"name"}, {}, {}
     };
-    allowed_code_confs["code:bitmap_check"] = {
-        {"table", "offset", "char", "mask"}, {}, {}
-    };
-    allowed_code_confs["code:abort_expr"] = {};
+    allowed_code_confs["code:abort"] = {};
     allowed_code_confs["code:yypeek_expr"] = {
-        {"expr"}, {}, {}
+        {"peek", "cursor", "typecast"}, {}, {}
     };
 
 #define STX_COND(name, selector) allowed_conds[name] = [](const opt_t* opts) { return selector; };
@@ -145,40 +148,15 @@ Ret Stx::check_word(const char* conf, const char* word, bool list) const {
     RET_FAIL(error("unknown value '%s' in configuration '%s'", word, conf));
 }
 
-// validate that all option names used in the given expression do exist
-Ret Stx::validate_conf_expr(const StxConf* conf) {
-    CHECK(conf->type == StxConfType::EXPR);
+// validate that the option name in the given configuration exists
+Ret Stx::validate_conf_word(const StxConf* conf) {
+    CHECK(conf->type == StxConfType::WORD);
 
     if (allowed_word_confs.find(conf->name) == allowed_word_confs.end()) {
         RET_FAIL(error("unknown configuration '%s'", conf->name));
     }
 
-    stack_expr_t& stack = stack_expr;
-    stack.clear();
-    stack.push_back({conf->expr, 0});
-
-    while (!stack.empty()) {
-        const StxExpr* e = stack.back().first;
-        uint8_t n = stack.back().second;
-        stack.pop_back();
-
-        switch (e->type) {
-        case StxExprType::NAME:
-            CHECK_RET(check_word(conf->name, e->name, /*list*/ false));
-            break;
-        case StxExprType::COND:
-            if (n == 0) { // recurse into branches
-                stack.push_back({e, 1});
-                stack.push_back({e->cond.then_expr, 0});
-                stack.push_back({e->cond.else_expr, 0});
-            } else { // check conditional name and return
-                CHECK_RET(check_cond(conf->name, e->cond.conf, /*code*/ false));
-            }
-            break;
-        }
-    }
-
-    return Ret::OK;
+    return check_word(conf->name, conf->word, /*list*/ false);
 }
 
 // validate that all option names used in the given list do exist
@@ -256,23 +234,88 @@ Ret Stx::validate_conf_code(const StxConf* conf) {
     return Ret::OK;
 }
 
+void Stx::add_conf(const char* name, const StxConf* conf) { confs[name] = conf; }
+
 bool Stx::have_conf(const char* name) const {
     return confs.find(name) != confs.end();
 }
 
-void Stx::push_list_on_stack(const StxCode* x) {
+void Stx::cache_conf_tests() {
+    have_oneline_if = have_conf("code:if_then_oneline");
+    have_oneline_switch = have_conf("code:switch_cases_oneline");
+}
+
+const char* Stx::list_conf_head(const char* name) const {
+    auto i = confs.find(name);
+    if (i != confs.end()) {
+        const StxConf* c = i->second;
+        CHECK(c->type == StxConfType::LIST);
+        const StxName* x = c->list->head;
+        if (x) return x->name;
+    }
+    return DEFAULT_EMPTY;
+}
+
+bool Stx::list_conf_find(const char* name, const char* elem) const {
+    auto i = confs.find(name);
+    if (i != confs.end()) {
+        const StxConf* c = i->second;
+        CHECK(c->type == StxConfType::LIST);
+        for (const StxName* x = c->list->head; x; x = x->next) {
+            if (strcmp(x->name, elem) == 0) return true;
+        }
+    }
+    return false;
+}
+
+const char* Stx::eval_word_conf(const char* name) const {
+    auto i = confs.find(name);
+    if (i != confs.end()) {
+        const StxConf* c = i->second;
+        CHECK(c->type == StxConfType::WORD);
+        return c->word;
+    }
+    return DEFAULT_EMPTY;
+}
+
+bool Stx::eval_bool_conf(const char* name) const {
+    return strcmp(eval_word_conf(name), "yes") == 0;
+}
+
+Ret Stx::eval_str_conf(const char* name, std::string& str) const{
+    auto i = confs.find(name);
+    if (i == confs.end()) {
+        str = DEFAULT_EMPTY;
+        return Ret::OK;
+    }
+
+    const StxConf* c = i->second;
+    CHECK(c->type == StxConfType::CODE);
+
+    const StxCode* x = c->code->head;
+    if (x && x->type == StxCodeType::STR && !x->next) {
+        str = x->str;
+        return Ret::OK;
+    } else {
+        RET_FAIL(error("configuration '%s' must have string value", c->name));
+    }
+}
+
+void Stx::push_list_on_stack(const StxCode* x) const {
     if (x == nullptr) return;
     push_list_on_stack(x->next);
     stack_code.push_back({x, 0});
 }
 
-bool Stx::eval_cond(const char* cond, const opt_t* opts, OutputCallback& callback) const {
+bool Stx::eval_cond(const char* cond, const opt_t* opts, RenderCallback* callback) const {
     auto i = allowed_conds.find(cond);
     if (i != allowed_conds.end()) {
         return i->second(opts);
-    } else {
-        return callback.eval_cond(cond);
+    } else if (callback != nullptr) {
+        return callback->eval_cond(cond);
     }
+    UNREACHABLE();
+    return false;
 }
 
 static inline bool eval_list_bounds(size_t size, int32_t& lbound, int32_t& rbound) {
@@ -281,15 +324,17 @@ static inline bool eval_list_bounds(size_t size, int32_t& lbound, int32_t& rboun
     return lbound <= rbound && rbound >= 0;
 }
 
-void Stx::gen_code(
-        std::ostream& os, const opt_t* opts, const char* name, OutputCallback& callback) {
-    DCHECK(confs.find(name) != confs.end());
-    const StxConf* conf = confs[name];
-    CHECK(conf->type == StxConfType::CODE);
+void Stx::eval_code_conf(
+        std::ostream& os, const opt_t* opts, const char* name, RenderCallback& callback) const {
+    auto i = confs.find(name);
+    if (i == confs.end()) return; // if configuration is not defined, do nothing
+
+    const StxConf* c = i->second;
+    CHECK(c->type == StxConfType::CODE);
 
     stack_code_t& stack = stack_code;
     size_t bottom = stack.size();
-    push_list_on_stack(conf->code->head);
+    push_list_on_stack(c->code->head);
 
     while (stack.size() != bottom) {
         const StxCode* x = stack.back().first;
@@ -301,11 +346,10 @@ void Stx::gen_code(
             os << x->str;
             break;
         case StxCodeType::VAR:
-            // TODO: unify handling of global vars
             callback.render_var(x->var);
             break;
         case StxCodeType::COND:
-            if (eval_cond(x->cond.conf, opts, callback)) {
+            if (eval_cond(x->cond.conf, opts, &callback)) {
                 push_list_on_stack(x->cond.then_code->head);
             } else if (x->cond.else_code != nullptr) {
                 push_list_on_stack(x->cond.else_code->head);
@@ -330,80 +374,9 @@ void Stx::gen_code(
     }
 }
 
-void Stx::cache_conf_tests() {
-    have_oneline_if = have_conf("code:if_then_oneline");
-    have_oneline_switch = have_conf("code:switch_cases_oneline");
-}
-
-StxFile::StxFile(const std::string& fname, Msg& msg, OutAllocator& alc)
-    : alc(alc)
-    , fname(fname)
-    , file(nullptr)
-    , flen(0)
-    , buf(nullptr)
-    , cur(nullptr)
-    , tok(nullptr)
-    , pos(nullptr)
-    , loc({1, 0, 0}) // file index 0 is reserved for syntax file
-    , msg(msg)
-{}
-
-StxFile::~StxFile() {
-    delete[] buf;
-    if (file) fclose(file);
-}
-
-Ret StxFile::read(Lang lang) {
-    msg.filenames.push_back(fname);
-
-    if (fname.empty()) {
-        // use the default syntax config that is provided as a string
-        const char* src = nullptr;
-        switch (lang) {
-            case Lang::C: src = DEFAULT_SYNTAX_C; break;
-            case Lang::GO: src = DEFAULT_SYNTAX_GO; break;
-            case Lang::RUST: src = DEFAULT_SYNTAX_RUST; break;
-        }
-        flen = strlen(src);
-
-        // allocate buffer
-        buf = new uint8_t[flen + 1];
-
-        // fill in buffer from the config string
-        memcpy(buf, src, flen);
-        buf[flen] = 0;
-    } else {
-        // use the provided syntax file
-        file = fopen(fname.c_str(), "rb");
-        if (!file) RET_FAIL(error("cannot open syntax file '%s'", fname.c_str()));
-
-        // get file size
-        fseek(file, 0, SEEK_END);
-        flen = static_cast<size_t>(ftell(file));
-        fseek(file, 0, SEEK_SET);
-
-        // allocate buffer
-        buf = new uint8_t[flen + 1];
-
-        // read file contents into buffer and append terminating zero at the end
-        if (fread(buf, 1, flen, file) != flen) {
-            RET_FAIL(error("cannot read syntax file '%s'", fname.c_str()));
-        }
-        buf[flen] = 0;
-    }
-
-    cur = tok = pos = buf;
-    return Ret::OK;
-}
-
-Ret load_syntax_config(const std::string& fname, Msg& msg, OutAllocator& alc, Stx& stx, Lang lang) {
-    StxFile sf(fname, msg, alc);
-    CHECK_RET(sf.read(lang));
-    CHECK_RET(sf.parse(stx));
-
-    stx.cache_conf_tests();
-
-    return Ret::OK;
+void Stx::eval_code_conf(std::ostream& os, const opt_t* opts, const char* name) const {
+    RenderCallback dummy;
+    eval_code_conf(os, opts, name, dummy);
 }
 
 } // namespace re2c

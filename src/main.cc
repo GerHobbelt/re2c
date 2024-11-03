@@ -9,7 +9,6 @@
 
 #include "src/adfa/adfa.h"
 #include "src/codegen/output.h"
-#include "src/codegen/syntax.h"
 #include "src/debug/debug.h"
 #include "src/dfa/dfa.h"
 #include "src/encoding/range_suffix.h"
@@ -138,20 +137,17 @@ LOCAL_NODISCARD(Ret compile(int, char* argv[])) {
 
     Msg msg;
 
-    // Options. This includes global immutable options inherited from command-line arguments and
-    // mutable options that may be changed by configurations as the input program is parsed.
-    conopt_t globopts;
-    Opt opts(globopts, msg);
-    CHECK_RET(parse_opts(argv, globopts, opts, msg));
-
-    // Load syntax file before opening source files, as it must have file index 0.
-    Stx stx(out_alc);
-    CHECK_RET(load_syntax_config(globopts.syntax_file, msg, out_alc, stx, globopts.lang));
+    // Options. This includes global immutable options inherited from command-line arguments,
+    // configurations specified in the syntax file and mutable options that may be changed by
+    // configurations in each block as the input program is parsed.
+    Opt opts(out_alc, msg);
+    CHECK_RET(opts.parse(argv));
+    const conopt_t& globopts = opts.global();
 
     Input input(&globopts, msg);
     CHECK_RET(input.open(globopts.source_file, nullptr));
 
-    Output output(out_alc, stx, msg);
+    Output output(out_alc, msg);
 
     Ast ast(ast_alc, out_alc);
 
@@ -192,7 +188,7 @@ LOCAL_NODISCARD(Ret compile(int, char* argv[])) {
             }
             output.gen_stmt(code_dfas(out_alc));
         }
-        output.gen_stmt(code_line_info_input(out_alc, b.opts->lang, input.cur_loc()));
+        if (globopts.line_dirs) output.gen_stmt(code_line_info_input(out_alc, input.cur_loc()));
 
         // Do not accumulate whole-program options for rules/reuse/local blocks. Global blocks add
         // their named definitions and configurations to the global scope, local blocks don't.

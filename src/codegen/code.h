@@ -257,17 +257,24 @@ struct CodeLabel {
     } kind;
 
     union {
-        Label* nlabel;
+        const Label* nlabel;
         const char* slabel;
     };
 };
 
-struct CodeTable {
+struct CodeArray {
     const char* name;
     const char* type;
     const char** elems;
     size_t size;
     bool tabulate;
+};
+
+struct CodeEnum {
+    const char* name;
+    size_t size;
+    const char** elem_ids;
+    const uint32_t* elem_nums;
 };
 
 struct Code {
@@ -280,10 +287,11 @@ struct Code {
         CodeFunc func;
         CodeRaw raw;
         CodeVar var;
+        CodeArray array;
+        CodeEnum enumr;
         CodeFmt fmt;
         CodeLabel label;
         CodeList* loop;
-        CodeTable* table;
         loc_t loc;
     };
 
@@ -339,7 +347,7 @@ inline Code* code_newline(OutAllocator& alc) {
     return code_textraw(alc, "");
 }
 
-inline Code* code_nlabel(OutAllocator& alc, Label* label) {
+inline Code* code_nlabel(OutAllocator& alc, const Label* label) {
     Code* x = new_code(alc, CodeKind::LABEL);
     x->label.kind = CodeLabel::Kind::NLABEL;
     x->label.nlabel = label;
@@ -350,6 +358,13 @@ inline Code* code_slabel(OutAllocator& alc, const char* label) {
     Code* x = new_code(alc, CodeKind::LABEL);
     x->label.kind = CodeLabel::Kind::SLABEL;
     x->label.slabel = label;
+    return x;
+}
+
+inline Code* code_debug(OutAllocator& alc, const Label* label) {
+    Code* x = new_code(alc, CodeKind::DEBUG);
+    x->label.kind = CodeLabel::Kind::NLABEL;
+    x->label.nlabel = label;
     return x;
 }
 
@@ -371,16 +386,13 @@ inline Code* code_state_goto(OutAllocator& alc, BlockNameList* blocks) {
     return x;
 }
 
-inline Code* code_line_info_input(OutAllocator& alc, Lang lang, const loc_t& loc) {
-    // Rust has no line directives.
-    if (lang == Lang::RUST) return nullptr;
-
+inline Code* code_line_info_input(OutAllocator& alc, const loc_t& loc) {
     Code* x = new_code(alc, CodeKind::LINE_INFO_INPUT);
     x->loc = loc;
     return x;
 }
 
-inline Code* code_var(OutAllocator& alc, VarType type, const std::string& name, const char* init) {
+inline Code* code_var(OutAllocator& alc, VarType type, const char* name, const char* init) {
     Code* x = new_code(alc, CodeKind::VAR);
     x->var.type = type;
     x->var.name = copystr(name, alc);
@@ -388,10 +400,14 @@ inline Code* code_var(OutAllocator& alc, VarType type, const std::string& name, 
     return x;
 }
 
-inline Code* code_line_info_output(OutAllocator& alc, Lang lang) {
-    // Rust has no line directives.
-    if (lang == Lang::RUST) return nullptr;
+inline void init_code_const(Code* x, VarType type, const char* name, const char* init) {
+    x->kind = CodeKind::CONST;
+    x->var.type = type;
+    x->var.name = name;
+    x->var.init = init;
+}
 
+inline Code* code_line_info_output(OutAllocator& alc) {
     return new_code(alc, CodeKind::LINE_INFO_OUTPUT);
 }
 
@@ -549,21 +565,33 @@ inline CodeCmp* code_cmp(OutAllocator& alc, const char* cmp, uint32_t val) {
     return x;
 }
 
-inline Code* code_table(
+inline Code* code_array(
         OutAllocator& alc,
         const char* name,
         const char* type,
         const char** elems,
         size_t size,
         bool tabulate = false) {
-    Code* x = new_code(alc, CodeKind::TABLE);
-    CodeTable* t = x->table = alc.alloct<CodeTable>(1);
-    t->name = name;
-    t->type = type;
-    t->elems = elems;
-    t->size = size;
-    t->tabulate = tabulate;
+    Code* x = new_code(alc, CodeKind::ARRAY);
+    x->array.name = name;
+    x->array.type = type;
+    x->array.elems = elems;
+    x->array.size = size;
+    x->array.tabulate = tabulate;
     return x;
+}
+
+inline void init_code_enum(
+        Code* x, const char* name, size_t size, const char** elem_ids, uint32_t* elem_nums) {
+    x->kind = CodeKind::ENUM;
+    x->enumr.name = name;
+    x->enumr.size = size;
+    x->enumr.elem_ids = elem_ids;
+    x->enumr.elem_nums = elem_nums;
+}
+
+inline Code* code_fingerprint(OutAllocator& alc) {
+    return new_code(alc, CodeKind::FINGERPRINT);
 }
 
 } // namespace re2c

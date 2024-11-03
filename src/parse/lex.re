@@ -223,7 +223,7 @@ loop:
     "/*!header:re2c:off" {
         out.gen_raw(tok, ptr);
         out.header_mode(false);
-        out.gen_stmt(code_line_info_input(alc, globopts->lang, cur_loc()));
+        if (globopts->line_dirs) out.gen_stmt(code_line_info_input(alc, cur_loc()));
         CHECK_RET(lex_block_end(out));
         goto next;
     }
@@ -237,7 +237,7 @@ loop:
         out.gen_raw(tok, ptr);
         CHECK_RET(lex_block_end(out));
         CHECK_RET(include(getstr(x + 1, y - 1), ptr));
-        out.gen_stmt(code_line_info_input(alc, globopts->lang, cur_loc()));
+        if (globopts->line_dirs) out.gen_stmt(code_line_info_input(alc, cur_loc()));
         goto next;
     }
     "/*!include:re2c" {
@@ -338,8 +338,8 @@ loop: /*!local:re2c
                 "ill-formed end of block: expected optional whitespaces followed by `*" "/`"));
     }
     eoc {
-        if (multiline) {
-            out.gen_stmt(code_line_info_input(out.allocator, globopts->lang, cur_loc()));
+        if (multiline && globopts->line_dirs) {
+            out.gen_stmt(code_line_info_input(out.allocator, cur_loc()));
         }
         return Ret::OK;
     }
@@ -387,9 +387,9 @@ loop: /*!local:re2c
     eol { next_line(); goto loop; }
 
     eoc {
-        out.gen_stmt(code_line_info_output(alc, globopts->lang));
+        if (globopts->line_dirs) out.gen_stmt(code_line_info_output(alc));
         out.gen_stmt(code_fmt(alc, kind, blocks, fmt, sep));
-        out.gen_stmt(code_line_info_input(alc, globopts->lang, cur_loc()));
+        if (globopts->line_dirs) out.gen_stmt(code_line_info_input(alc, cur_loc()));
         return Ret::OK;
     }
 */
@@ -651,7 +651,7 @@ loop_dquote: /*!re2c
         eol       { next_line(); goto loop_dquote; }
         *         { goto loop_dquote; }
     */
-    } else if (quote == '`' && globopts->lang == Lang::GO) {
+    } else if (quote == '`' && globopts->eval_bool_conf("backtick_quoted_strings")) {
 loop_backtick: /*!re2c
         [`] { return Ret::OK; }
         eol { next_line(); goto loop_backtick; }
@@ -676,7 +676,7 @@ loop_backtick: /*!re2c
         [^]                       ['] { // any UTF-8 encoded Unicode symbol, unescaped
             return Ret::OK;
         }
-        "" { return globopts->lang == Lang::RUST ? Ret::OK : Ret::FAIL; }
+        "" { return globopts->eval_bool_conf("standalone_single_quotes") ? Ret::OK : Ret::FAIL; }
     */
     }
     return Ret::FAIL;
